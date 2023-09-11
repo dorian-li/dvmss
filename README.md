@@ -1,2 +1,3 @@
-# momss
-Moving Object Magnetic Sensor Simulation
+dvmss
+
+**Dynamic Vehicle Magnetic Sensor Simulation**
