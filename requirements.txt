@@ -1,0 +1,8 @@
+numpy
+matplotlib
+pandas
+tqdm
+scipy
+scikit-learn
+ppigrf
+loguru
