@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from datetime import datetime
 from typing import List
 
 import numpy as np
@@ -26,15 +27,17 @@ class VehicleState:
 
 @dataclass
 class Flight:
+    date: datetime
     states: List[VehicleState]
 
     @classmethod
-    def setup(cls, states: List[VehicleState]):
-        return cls(states=states)
+    def setup(cls, date: datetime, states: List[VehicleState]):
+        return cls(date=date, states=states)
 
     @classmethod
     def setup_from_series(
         cls,
+        date: datetime,
         timestamp: ArrayLike,
         longitude: ArrayLike,
         latitude: ArrayLike,
@@ -73,4 +76,4 @@ class Flight:
             )
             for i in range(len(timestamp))
         ]
-        return cls.setup(states)
+        return cls.setup(date, states)
