@@ -7,8 +7,10 @@ import pyvista as pv
 from sgl2020 import SGL2020
 
 from dvmss.agent import InducedParam, MagAgent, PermParam, VehicleParam
+from dvmss.detector import Detector, DetectorGroup
 from dvmss.flight import Flight
 from dvmss.geomag import IGRF
+from dvmss.simulation import Simulation
 
 if __name__ == "__main__":
     # 通过plot载体3D模型，确认导入模型在当前坐标系下的初始朝向、最长轴对应机身还是机翼
@@ -39,3 +41,18 @@ if __name__ == "__main__":
         attitude=flt_d[["ins_pitch", "ins_roll", "ins_yaw"]],
     )
     print(flight)
+
+    detectors = DetectorGroup.of(
+        Detector.setup_with_interactive(
+            sensor_type="scalar",
+            noise_level=0.1,
+        ),
+        Detector.setup_with_interactive(
+            sensor_type="vector",
+            noise_level=0.1,
+        ),
+    )
+
+    simluation = Simulation(mag_agent, IGRF(), flight)
+    sampled_detectors = simluation.sample(detectors)
+    print(sampled_detectors)

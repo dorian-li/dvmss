@@ -3,8 +3,9 @@ from typing import List
 
 import numpy as np
 import pandas as pd
+from numpy.typing import ArrayLike
 
-ArrayLike = np.ndarray | pd.Series | pd.DataFrame | list
+# ArrayLike = np.ndarray | pd.Series | pd.DataFrame | list
 
 
 @dataclass
@@ -46,7 +47,7 @@ class Flight:
         latitude = np.array(latitude)
         elevation = np.array(elevation)
         attitude = np.array(attitude)
-        
+
         assert (
             timestamp.shape == (len(timestamp),)
             and longitude.shape == (len(longitude),)

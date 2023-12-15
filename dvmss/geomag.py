@@ -24,15 +24,15 @@ class GeomagneticElement:
         return cls(X, Y, Z, H, D, I, F)
 
 
-class GeomagnticReferenceField:
+class GeomagneticReferenceField:
     def get_magnetic_field(self, date, lon, lat, alt):
-        if self.__class__ is GeomagnticReferenceField:
+        if self.__class__ is GeomagneticReferenceField:
             raise NotImplementedError
 
         pass
 
 
-class IGRF(GeomagnticReferenceField):
+class IGRF(GeomagneticReferenceField):
     def get_magnetic_field(self, date: datetime, lon: float, lat: float, alt: float):
         b_e, b_n, b_u = ppigrf.igrf(lon, lat, alt, date)  # 大地坐标系，z轴向上为正
         return GeomagneticElement.create_by_XYZ(b_n, b_e, -b_u)  # 地磁场坐标系，z轴向下为正
