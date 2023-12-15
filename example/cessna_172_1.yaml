@@ -1,0 +1,19 @@
+vehicle:
+  model_3d: "cessna_172.stl"
+  init_orientation: [0.0, 1.0, 0.0]
+  real_longest_axis_length: 11
+
+interference:
+  permanent_field:
+    sources:
+      - location: [1.0, 0.0, 0.0]
+        orientation: [0.707, 0.707, 0.0]
+        moment: 5.0
+
+      - location: [0.0, 1.0, 0.0]
+        orientation: [-0.707, 0.707, 0.0]
+        moment: 3.0
+
+  induced_field:
+    voxel_cell_size: 0.1
+    susceptibility: 0.05
