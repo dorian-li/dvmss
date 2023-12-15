@@ -1,8 +1,13 @@
 numpy
 matplotlib
+pyvista
+plotly
+pyyaml
 pandas
 tqdm
 scipy
 scikit-learn
 ppigrf
-loguru
+metalpy[complete] @ git+https://github.com/MetallyInduced/metalpy.git
+deinterf
+sgl2020
