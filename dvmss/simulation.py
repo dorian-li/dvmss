@@ -1,9 +1,10 @@
+from functools import reduce
 from typing import List, Union
 
 import numpy as np
 
 from .agent import MagAgent
-from .detector import DetectorGroup
+from .detector import DetectorCollection
 from .flight import Flight
 from .geomag import GeomagneticReferenceField
 
@@ -24,5 +25,5 @@ class Simulation:
             self.flight.states.get_elevation(),
         )
 
-    def sample(self, detectors: DetectorGroup):
+    def sample(self, detectors: DetectorCollection):
         return detectors

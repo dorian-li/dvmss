@@ -1,12 +1,11 @@
-from dataclasses import dataclass
+from dataclasses import astuple, dataclass
 from datetime import datetime
 from typing import List
 
 import numpy as np
-import pandas as pd
 from numpy.typing import ArrayLike
 
-# ArrayLike = np.ndarray | pd.Series | pd.DataFrame | list
+from .utils import flatten_tuple
 
 
 @dataclass
@@ -28,11 +27,11 @@ class VehicleState:
 @dataclass
 class Flight:
     date: datetime
-    states: List[VehicleState]
+    states: np.ndarray
 
     @classmethod
     def setup(cls, date: datetime, states: List[VehicleState]):
-        return cls(date=date, states=states)
+        return cls(date, np.array([flatten_tuple(astuple(s)) for s in states]))
 
     @classmethod
     def setup_from_series(

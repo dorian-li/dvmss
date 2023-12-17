@@ -7,7 +7,7 @@ import pyvista as pv
 from sgl2020 import SGL2020
 
 from dvmss.agent import InducedParam, MagAgent, PermParam, VehicleParam
-from dvmss.detector import Detector, DetectorGroup
+from dvmss.detector import Detector, DetectorCollection
 from dvmss.flight import Flight
 from dvmss.geomag import IGRF
 from dvmss.simulation import Simulation
@@ -42,7 +42,7 @@ if __name__ == "__main__":
     )
     print(flight)
 
-    detectors = DetectorGroup.of(
+    detectors = DetectorCollection.of(
         Detector.setup_with_interactive(
             sensor_type="scalar",
             noise_level=0.1,

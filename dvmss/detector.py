@@ -55,7 +55,7 @@ class Detector:
 
 
 @dataclass
-class DetectorGroup:
+class DetectorCollection:
     detectors: List[Detector]
 
     @classmethod

@@ -1,70 +1,136 @@
+from abc import ABC, abstractmethod
 from dataclasses import astuple, dataclass, make_dataclass
 from datetime import datetime
 from enum import Enum, IntEnum, auto
 from typing import List, Union
 
 import numpy as np
+import pandas as pd
 import ppigrf
 from numpy.typing import ArrayLike
+from SimPEG.utils.mat_utils import dip_azimuth2cartesian
 
 
-class GeomagneticElement(IntEnum):
-    X = 0  # 北向分量强度
-    Y = auto()  # 东向分量强度
-    Z = auto()  # 垂直向分量强度
-    H = auto()  # 水平向分量强度
-    D = auto()  # 磁偏角
-    I = auto()  # 磁倾角
-    F = auto()  # 总强度
+class GeomagElem(Enum):
+    """地磁七要素，与对应标记数组名"""
+
+    NORTH = "north"  # 北向分量强度
+    EAST = "east"  # 东向分量强度
+    VERTICAL = "vertical"  # 垂直向分量强度
+    HORIZONTAL = "horizontal"  # 水平向分量强度
+    DECLINATION = "declination"  # 磁偏角
+    INCLINATION = "inclination"  # 磁倾角
+    TOTAL = "total"  # 总强度
 
 
-@dataclass
-class GeomagneticField:
-    X: float  # 北向分量强度(nT)
-    Y: float  # 东向分量强度(nT)
-    Z: float  # 垂直向分量强度(nT)
-    H: float  # 水平向分量强度(nT)
-    D: float  # 磁偏角(degree)
-    I: float  # 磁倾角(degree)
-    F: float  # 总强度(nT)
+class GeomagData:
+    """一组地磁场数据，每个数据点包含地磁七要素，存储底层为pandas.DataFrame"""
 
-    @classmethod
-    def make_from_XYZ(cls, X: float, Y: float, Z: float):
-        H = (X**2 + Y**2) ** 0.5
-        D = np.arctan2(Y, X) * 180 / np.pi
-        I = np.arctan2(Z, H) * 180 / np.pi
-        F = (X**2 + Y**2 + Z**2) ** 0.5
-        return cls(X, Y, Z, H, D, I, F)
-
-
-class GeomagneticFieldCollection:
-    def __init__(self, fields: List[GeomagneticField]):
-        # fields transform to numpy.ndarray, shape=(len(fields), len(GeomagneticElement))
-        self.fields = np.array([astuple(f) for f in fields])
-
-    def get_element_array(self, *element: GeomagneticElement):
-        return make_dataclass(
-            "GeomagneticFieldSubset",
-            [(f"{e.name}", np.ndarray) for e in element],
-        )(*[self.fields[:, e] for e in element])
+    def __init__(self):
+        self._data = pd.DataFrame(columns=[e.value for e in GeomagElem])
 
     @classmethod
-    def make_from_XYZ(cls, X: ArrayLike, Y: ArrayLike, Z: ArrayLike):
-        fields = [GeomagneticField.make_from_XYZ(x, y, z) for x, y, z in zip(X, Y, Z)]
-        return cls(fields)
+    def setup_from_pandas(cls, data: pd.DataFrame):
+        """由pandas.DataFrame经验证后构造GeomagData"""
+
+        try:
+            assert data.shape[1] == len(GeomagElem)
+        except AssertionError as e:
+            raise ValueError(
+                f"data shape must be (n, {len(GeomagElem)}): {data.shape}"
+            ) from e
+
+        try:
+            assert set(data.columns) == set([e.value for e in GeomagElem])
+        except AssertionError as e:
+            raise ValueError(
+                f"data columns must be {set([e.value for e in GeomagElem])}: {set(data.columns)}"
+            ) from e
+        instance = cls()
+        instance._data = data
+        return instance
+
+    def query(self, *elements: GeomagElem):
+        """查询一组指定的地磁场要素（某一个或多个要素)"""
+        return self._data[[e.value for e in elements]]
+
+    def get_orientations(self):
+        """获取地磁场方向向量"""
+        return dip_azimuth2cartesian(
+            self._data[GeomagElem.INCLINATION],
+            self._data[GeomagElem.DECLINATION],
+        )
+
+    @classmethod
+    def make_from_NED(cls, north: ArrayLike, east: ArrayLike, vertical: ArrayLike):
+        """由北向分量、东向分量、垂直向分量经验证后构造完整GeomagData"""
+
+        north = np.array(north)
+        east = np.array(east)
+        vertical = np.array(vertical)
+        try:
+            assert north.shape == east.shape == vertical.shape
+        except AssertionError as e:
+            raise ValueError("north, east and vertical must be the same shape") from e
+        try:
+            assert np.ndim(north) == 1
+        except AssertionError as e:
+            raise ValueError("north, east and vertical must be 1D") from e
+
+        horizontal = np.sqrt(north**2 + east**2)
+        declination = np.rad2deg(np.arctan2(east, north))
+        inclination = np.rad2deg(np.arctan2(vertical, horizontal))
+        total = np.sqrt(north**2 + east**2 + vertical**2)
+        return cls.setup_from_pandas(
+            pd.DataFrame(
+                {
+                    GeomagElem.NORTH.value: north,
+                    GeomagElem.EAST.value: east,
+                    GeomagElem.VERTICAL.value: vertical,
+                    GeomagElem.HORIZONTAL.value: horizontal,
+                    GeomagElem.DECLINATION.value: declination,
+                    GeomagElem.INCLINATION.value: inclination,
+                    GeomagElem.TOTAL.value: total,
+                }
+            )
+        )
 
 
-class GeomagneticReferenceField:
-    def get_magnetic_field(self, date, lon, lat, alt) -> GeomagneticElement:
-        if self.__class__ is GeomagneticReferenceField:
-            raise NotImplementedError
-
+class GeomagRefField(ABC):
+    @classmethod
+    @abstractmethod
+    def query(cls, date, lon, lat, alt) -> GeomagData:
+        """查询某一日期、某一地理位置的参考地磁场数据"""
+        if cls.__class__ == GeomagRefField:
+            raise NotImplementedError(
+                "GeomagneticReferenceField is an abstract class, "
+                "please use one of its subclasses"
+            )
         pass
 
 
-class IGRF(GeomagneticReferenceField):
-    def get_magnetic_field(
-        self, date: datetime, lon: float, lat: float, alt: float
-    ) -> GeomagneticFieldCollection:
-        b_e, b_n, b_u = ppigrf.igrf(lon, lat, alt, date)  # 大地坐标系，z轴向上为正
-        return GeomagneticElement.create_by_XYZ(b_n, b_e, -b_u)  # 地磁场坐标系，z轴向下为正
+class IGRF(GeomagRefField):
+    @classmethod
+    def query(
+        cls,
+        date: datetime,
+        longitude: ArrayLike,
+        latitude: ArrayLike,
+        elevation: ArrayLike,
+    ) -> GeomagData:
+        """通过IGRF模型，查询某一日期、某一地理位置的参考地磁场数据"""
+        longitude = np.array(longitude)
+        latitude = np.array(latitude)
+        elevation = np.array(elevation)
+
+        b_e, b_n, b_u = ppigrf.igrf(
+            longitude,
+            latitude,
+            elevation,
+            date,
+        )  # 大地坐标系，z轴向上为正
+        # 默认输出shape为(1, n)，将其转换为(n,)
+        b_e = np.array(b_e).flatten()
+        b_n = np.array(b_n).flatten()
+        b_u = np.array(b_u).flatten()
+        return GeomagData.make_from_NED(b_n, b_e, -b_u)  # 地磁场坐标系，z轴向下为正
