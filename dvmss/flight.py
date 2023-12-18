@@ -108,3 +108,6 @@ class Flight:
             }
         )
         return cls.setup_from_pandas(date, states)
+    
+    def __repr__(self) -> str:
+        return f"{self.date=}\n{self._states}"

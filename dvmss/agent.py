@@ -156,7 +156,7 @@ class MagAgent:
         for source in config["interference"]["permanent_field"]["sources"]:
             location = source.get("location")
             if location is not None:
-                location = np.array(location)
+                location = CartesianCoord(*location)
             else:
                 pass
             perm_sources.append(
