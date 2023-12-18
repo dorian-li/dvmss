@@ -1,57 +1,51 @@
-from dataclasses import dataclass
+from dataclasses import astuple, dataclass
+from enum import Enum, auto
 from typing import List, Literal, Optional, Union
 
 import numpy as np
+import pandas as pd
 
 from .utils import CartesianCoord
 
-MagSensor = Literal["vector", "scalar"]
+
+class MagSensorType(Enum):
+    """磁传感器类型"""
+
+    SCALAR = auto()
+    VECTOR = auto()
 
 
-@dataclass
-class MagScalar:
-    timestamp: float
-    bt: float
+class MagSensor(Enum):
+    """磁传感器分量"""
+
+    BX = auto()
+    BY = auto()
+    BZ = auto()
+    BT = auto()
 
 
-@dataclass
-class MagScalarSensor:
-    data: List[MagScalar]
-
-
-@dataclass
-class MagVector:
-    timestamp: float
-    bx: float
-    by: float
-    bz: float
-
-
-@dataclass
-class MagVectorSensor:
-    data: List[MagVector]
-
-
+# class Detector:
+#     def __init__(
+#         self,
+#         id: int = None,
+#         location: Optional[CartesianCoord] = None,
+#         sensor_type: MagSensor = None,
+#         sensor_data=pd.DataFrame(columns=[e for e in MagSensor]),
+#         interactive=False,
+#     ) -> None:
+#         self.id = id
+#         self.location = location
+#         self.sensor_type = sensor_type
+#         self.sensor_data = sensor_data
+#         self.interactive = interactive
+# use dataclass instead of class
 @dataclass
 class Detector:
-    id: Optional[str] = None
+    sensor_type: MagSensorType
+    id: int = None
     location: Optional[CartesianCoord] = None
-    sensor_type: MagSensor
-    noise_level: float
-    sensor: Optional[Union[MagScalarSensor, MagVectorSensor]] = None
-
-    @classmethod
-    def setup(
-        cls,
-        location: Optional[CartesianCoord],
-        sensor_type: MagSensor,
-        noise_level: float,
-    ):
-        return cls(location, sensor_type, noise_level)
-
-    @classmethod
-    def setup_with_interactive(cls, sensor_type: MagSensor, noise_level: float):
-        return cls.setup(None, sensor_type, noise_level)
+    sensor_data: pd.DataFrame = pd.DataFrame(columns=[e for e in MagSensor])
+    loc_interactive: bool = False
 
 
 @dataclass
@@ -61,3 +55,6 @@ class DetectorCollection:
     @classmethod
     def of(cls, *detectors: Detector):
         return cls(list(detectors))
+
+    def get_locations_numpy(self):
+        return np.array([astuple(detector.location) for detector in self.detectors])

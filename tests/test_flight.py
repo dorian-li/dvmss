@@ -1,6 +1,3 @@
-import os
-
-os.sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from dataclasses import astuple
 from datetime import datetime
 from typing import List

@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from dataclasses import astuple, dataclass, make_dataclass
 from datetime import datetime
-from enum import Enum, IntEnum, auto
+from enum import Enum, auto
 from typing import List, Union
 
 import numpy as np
@@ -12,47 +12,44 @@ from SimPEG.utils.mat_utils import dip_azimuth2cartesian
 
 
 class GeomagElem(Enum):
-    """地磁七要素，与对应标记数组名"""
+    """地磁七要素"""
 
-    NORTH = "north"  # 北向分量强度
-    EAST = "east"  # 东向分量强度
-    VERTICAL = "vertical"  # 垂直向分量强度
-    HORIZONTAL = "horizontal"  # 水平向分量强度
-    DECLINATION = "declination"  # 磁偏角
-    INCLINATION = "inclination"  # 磁倾角
-    TOTAL = "total"  # 总强度
+    NORTH = auto()  # 北向分量强度(nanoTesla)
+    EAST = auto()  # 东向分量强度(nanoTesla)
+    VERTICAL = auto()  # 垂直向分量强度(nanoTesla)
+    HORIZONTAL = auto()  # 水平向分量强度(nanoTesla)
+    DECLINATION = auto()  # 磁偏角(degree)
+    INCLINATION = auto()  # 磁倾角(degree)
+    TOTAL = auto()  # 总强度(nanoTesla)
 
 
 class GeomagData:
     """一组地磁场数据，每个数据点包含地磁七要素，存储底层为pandas.DataFrame"""
 
     def __init__(self):
-        self._data = pd.DataFrame(columns=[e.value for e in GeomagElem])
+        self._data = pd.DataFrame(columns=[e for e in GeomagElem])
 
     @classmethod
     def setup_from_pandas(cls, data: pd.DataFrame):
         """由pandas.DataFrame经验证后构造GeomagData"""
 
-        try:
-            assert data.shape[1] == len(GeomagElem)
-        except AssertionError as e:
-            raise ValueError(
-                f"data shape must be (n, {len(GeomagElem)}): {data.shape}"
-            ) from e
+        if data.shape[1] != len(GeomagElem):
+            raise ValueError(f"data shape must be (n, {len(GeomagElem)}): {data.shape}")
 
-        try:
-            assert set(data.columns) == set([e.value for e in GeomagElem])
-        except AssertionError as e:
+        if set(data.columns) != set([e for e in GeomagElem]):
             raise ValueError(
                 f"data columns must be {set([e.value for e in GeomagElem])}: {set(data.columns)}"
-            ) from e
+            )
+
         instance = cls()
         instance._data = data
         return instance
 
     def query(self, *elements: GeomagElem):
         """查询一组指定的地磁场要素（某一个或多个要素)"""
-        return self._data[[e.value for e in elements]]
+        if len(elements) == 1:
+            return self._data[elements[0]]
+        return self._data[[e for e in elements]]
 
     def get_orientations(self):
         """获取地磁场方向向量"""
@@ -68,14 +65,12 @@ class GeomagData:
         north = np.array(north)
         east = np.array(east)
         vertical = np.array(vertical)
-        try:
-            assert north.shape == east.shape == vertical.shape
-        except AssertionError as e:
-            raise ValueError("north, east and vertical must be the same shape") from e
-        try:
-            assert np.ndim(north) == 1
-        except AssertionError as e:
-            raise ValueError("north, east and vertical must be 1D") from e
+
+        if north.shape != east.shape or north.shape != vertical.shape:
+            raise ValueError("north, east and vertical must be the same shape")
+
+        if np.ndim(north) != 1:
+            raise ValueError("north, east and vertical must be 1D")
 
         horizontal = np.sqrt(north**2 + east**2)
         declination = np.rad2deg(np.arctan2(east, north))
@@ -84,13 +79,13 @@ class GeomagData:
         return cls.setup_from_pandas(
             pd.DataFrame(
                 {
-                    GeomagElem.NORTH.value: north,
-                    GeomagElem.EAST.value: east,
-                    GeomagElem.VERTICAL.value: vertical,
-                    GeomagElem.HORIZONTAL.value: horizontal,
-                    GeomagElem.DECLINATION.value: declination,
-                    GeomagElem.INCLINATION.value: inclination,
-                    GeomagElem.TOTAL.value: total,
+                    GeomagElem.NORTH: north,
+                    GeomagElem.EAST: east,
+                    GeomagElem.VERTICAL: vertical,
+                    GeomagElem.HORIZONTAL: horizontal,
+                    GeomagElem.DECLINATION: declination,
+                    GeomagElem.INCLINATION: inclination,
+                    GeomagElem.TOTAL: total,
                 }
             )
         )

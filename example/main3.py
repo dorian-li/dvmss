@@ -1,16 +1,18 @@
 import os
 
 os.sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import pyvista as pv
 from sgl2020 import SGL2020
 
 from dvmss.agent import InducedParam, MagAgent, PermParam, VehicleParam
-from dvmss.detector import Detector, DetectorCollection
+from dvmss.detector import Detector, DetectorCollection, MagSensorType
 from dvmss.flight import Flight
 from dvmss.geomag import IGRF
 from dvmss.simulation import Simulation
+from dvmss.utils import CartesianCoord
 
 if __name__ == "__main__":
     # 通过plot载体3D模型，确认导入模型在当前坐标系下的初始朝向、最长轴对应机身还是机翼
@@ -29,30 +31,48 @@ if __name__ == "__main__":
     surv = SGL2020()
     flt_d = (
         surv.line(1002.02)
-        .source(["tt", "lon", "lat", "utm_z", "ins_pitch", "ins_roll", "ins_yaw"])
+        .source(
+            [
+                "tt",
+                "lon",
+                "lat",
+                "utm_z",
+                "ins_pitch",
+                "ins_roll",
+                "ins_yaw",
+            ]
+        )
         .take(include_line=True)
     )
     print(flt_d)
+    date = datetime(2020, 6, 20)
     flight = Flight.setup_from_series(
+        date=date,
         timestamp=flt_d["tt"],
         longitude=flt_d["lon"],
         latitude=flt_d["lat"],
         elevation=flt_d["utm_z"],
-        attitude=flt_d[["ins_pitch", "ins_roll", "ins_yaw"]],
+        roll=flt_d["ins_roll"],
+        pitch=flt_d["ins_pitch"],
+        yaw=flt_d["ins_yaw"],
     )
+
     print(flight)
 
     detectors = DetectorCollection.of(
-        Detector.setup_with_interactive(
-            sensor_type="scalar",
-            noise_level=0.1,
+        Detector(
+            location=CartesianCoord(0, 0, 0),
+            sensor_type=MagSensorType.SCALAR,
+            # loc_interactive=True,
         ),
-        Detector.setup_with_interactive(
-            sensor_type="vector",
-            noise_level=0.1,
+        Detector(
+            location=CartesianCoord(0, 0, 0),
+            sensor_type=MagSensorType.VECTOR,
+            # loc_interactive=True,
         ),
     )
 
-    simluation = Simulation(mag_agent, IGRF(), flight)
-    sampled_detectors = simluation.sample(detectors)
-    print(sampled_detectors)
+    simluation = Simulation(mag_agent, IGRF, flight)
+    simluation.perm_interf(detectors)
+    # sampled_detectors = simluation.sample(detectors)
+    # print(sampled_detectors)

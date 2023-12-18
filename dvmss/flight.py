@@ -1,37 +1,64 @@
 from dataclasses import astuple, dataclass
 from datetime import datetime
+from enum import Enum, auto
 from typing import List
 
 import numpy as np
+import pandas as pd
 from numpy.typing import ArrayLike
 
-from .utils import flatten_tuple
+from dvmss.utils import flatten_tuple
 
 
-@dataclass
-class Attitude:
-    roll: float  # 以向右舷为正(degree)
-    pitch: float  # 以向上为正(degree)
-    yaw: float  # 以从北顺时针为正(degree)
+class VehicleState(Enum):
+    TIMESTAMP = auto()  # 时间戳(us)
+
+    # 地理坐标系
+    LONGITUDE = auto()  # 经度(degree)
+    LATITUDE = auto()  # 纬度(degree)
+    ELEVATION = auto()  # 海拔高度(m)
+
+    # 飞行姿态
+    ROLL = auto()  # 以向右舷为正(degree)
+    PITCH = auto()  # 以向上为正(degree)
+    YAW = auto()  # 以从北顺时针为正(degree)
 
 
-@dataclass
-class VehicleState:
-    timestamp: float  # 时间戳(us)
-    longitude: float  # 经度(degree)
-    latitude: float  # 纬度(degree)
-    elevation: float  # 海拔高度(m)
-    attitude: Attitude
-
-
-@dataclass
 class Flight:
-    date: datetime
-    states: np.ndarray
+    def __init__(self) -> None:
+        self._date: datetime = None
+        self._states = pd.DataFrame(columns=[s for s in VehicleState])
+
+    @property
+    def date(self):
+        return self._date
 
     @classmethod
-    def setup(cls, date: datetime, states: List[VehicleState]):
-        return cls(date, np.array([flatten_tuple(astuple(s)) for s in states]))
+    def setup_from_pandas(cls, date: datetime, states: pd.DataFrame):
+        """由pandas.DataFrame经验证后构造Flight"""
+        if not isinstance(date, datetime):
+            raise ValueError(f"date must be datetime: {date}")
+
+        if states.shape[1] != len(VehicleState):
+            raise ValueError(
+                f"states shape must be (n, {len(VehicleState)}): {states.shape}"
+            )
+
+        if set(states.columns) != set([s for s in VehicleState]):
+            raise ValueError(
+                f"states columns must be {set([s for s in VehicleState])}: {set(states.columns)}"
+            )
+
+        instance = cls()
+        instance._date = date
+        instance._states = states
+        return instance
+
+    def query(self, *states: VehicleState):
+        """查询一组指定的载体状态（某一个或多个载体状态)"""
+        if len(states) == 1:
+            return self._states[states[0]]
+        return self._states[[s for s in states]]
 
     @classmethod
     def setup_from_series(
@@ -41,38 +68,43 @@ class Flight:
         longitude: ArrayLike,
         latitude: ArrayLike,
         elevation: ArrayLike,
-        attitude: ArrayLike,
+        roll: ArrayLike,
+        pitch: ArrayLike,
+        yaw: ArrayLike,
     ):
-        # transform ArrayLike to np.ndarray
         timestamp = np.array(timestamp)
         longitude = np.array(longitude)
         latitude = np.array(latitude)
         elevation = np.array(elevation)
-        attitude = np.array(attitude)
+        roll = np.array(roll)
+        pitch = np.array(pitch)
+        yaw = np.array(yaw)
 
-        assert (
-            timestamp.shape == (len(timestamp),)
-            and longitude.shape == (len(longitude),)
-            and latitude.shape == (len(latitude),)
-            and elevation.shape == (len(elevation),)
-            and attitude.shape == (len(attitude), 3)
-        )
-        assert (
-            len(timestamp)
-            == len(longitude)
-            == len(latitude)
-            == len(elevation)
-            == len(attitude)
-        )
+        if not isinstance(date, datetime):
+            raise ValueError(f"date must be datetime: {date}")
 
-        states = [
-            VehicleState(
-                timestamp=timestamp[i],
-                longitude=longitude[i],
-                latitude=latitude[i],
-                elevation=elevation[i],
-                attitude=attitude[i],
+        if not (
+            timestamp.shape
+            == longitude.shape
+            == latitude.shape
+            == elevation.shape
+            == roll.shape
+            == pitch.shape
+            == yaw.shape
+        ):
+            raise ValueError(
+                f"timestamp, longitude, latitude, elevation, roll, pitch, yaw must be the same shape"
             )
-            for i in range(len(timestamp))
-        ]
-        return cls.setup(date, states)
+
+        states = pd.DataFrame(
+            {
+                VehicleState.TIMESTAMP: timestamp,
+                VehicleState.LONGITUDE: longitude,
+                VehicleState.LATITUDE: latitude,
+                VehicleState.ELEVATION: elevation,
+                VehicleState.ROLL: roll,
+                VehicleState.PITCH: pitch,
+                VehicleState.YAW: yaw,
+            }
+        )
+        return cls.setup_from_pandas(date, states)

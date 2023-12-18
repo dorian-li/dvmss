@@ -81,12 +81,19 @@ import numpy as np
 import pyvista as pv
 import yaml
 
+from dvmss.utils import CartesianCoord
+
 
 @dataclass
 class MagDipoleParam:
-    location: np.ndarray  # 磁偶极子笛卡尔坐标系位置
+    location: CartesianCoord  # 磁偶极子笛卡尔坐标系位置
     orientation: np.ndarray  # 磁偶极子方向，归一化单位矢量
     moment: float  # 磁偶极子振幅 (A/m^2)
+    moment_vector: Optional[np.ndarray] = None  # 磁偶极子磁矩矢量
+
+    def __post_init__(self):
+        if self.moment_vector is None:
+            self.moment_vector = self.moment * self.orientation
 
 
 @dataclass
