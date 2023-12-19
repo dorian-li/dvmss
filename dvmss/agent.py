@@ -42,7 +42,7 @@ class PermParam:
 
 @dataclass
 class InducedParam:
-    voxel_cell_size: float  # 载体3D模型体素化后网格尺寸
+    voxel_cell_size: float  # 载体3D模型体素化后网格尺寸（米）
     susceptibility: float  # 网格的磁化率，对所有载体体素网格均取相同值
 
 
@@ -64,14 +64,17 @@ class VehicleParam:
     actual_height: float  # 机身高度
     init_orientation: Optional[Orientation] = None  # 载体3D模型初始朝向
 
-    def select_orientation_interactively(self):
+    def pick_orientation(self):
         orientation: Orientation = None
 
         def callback(mesh):
             nonlocal orientation
-            orientation = Orientation(
-                *(Bounds(mesh.bounds).center - Bounds(self.model_3d.bounds).center)
-            )
+            try:
+                orientation = Orientation(
+                    *(Bounds(mesh.bounds).center - Bounds(self.model_3d.bounds).center)
+                )
+            except AttributeError as e:
+                pass
             print(orientation)
 
         pl = Plotter()
@@ -100,7 +103,7 @@ class VehicleParam:
 
     def rotate_to_northward(self):
         if self.init_orientation is None:
-            self.init_orientation = self.select_orientation_interactively()
+            self.init_orientation = self.pick_orientation()
         to_northward_r = R.align_vectors(
             self.init_orientation.to_numpy().reshape((1, 3)),
             np.array([(0, 1, 0)]),  # y轴正方向为正北

@@ -27,28 +27,24 @@ class Simulation:
         self.geomag = geomag
         self.flight = flight
         self._cached_background_field: GeomagData = None
+        self.mag_agent_mesh = self.voxelize_mag_agent()
+        # self.mag_agent_mesh.to_polydata().plot(show_grid=True, show_edges=True, opacity=0.5)
 
-    # def voxelize_mag_agent(self):
-    #     vehicle = self.mag_agent.config.vehicle
-    #     model_3d_bounds = Bounds(vehicle.model_3d.bounds).extent
-    #     if vehicle.wingspan > vehicle.length:
-    #         wing_axis = model_3d_bounds.argmax()
-    #     scale_factor = (
-    #         self.mag_agent.config.vehicle.real_longest_axis_length
-    #         / Bounds(vehicle_3d.bounds).extent.max()
-    #     )
-    #     agent_obj = Obj2(
-    #         model=vehicle.model_3d,
-    #         scale=scale_factor,
-    #         surface_range=[-0.1, 0.1],
-    #         subdivide=True,
-    #         ignore_surface_check=True,
-    #     )
-    #     to_scene_center = -1 * agent_obj.center
-    #     # Rotation(180, 0, 0, degrees=True, seq="zyx") rotate to Rotation(0, 0, 0, degrees=True, seq="zyx")
-    #     to_northward =
-    #     agent_obj.translate(*to_scene_center).apply()
-    #     scene = Scene.of()
+    def voxelize_mag_agent(self):
+        scene = Scene.of(
+            Obj2(
+                model=self.mag_agent.config.vehicle.model_3d,
+                surface_range=[-0.1, 0.1],
+                subdivide=True,
+                ignore_surface_check=True,
+            ),
+            models=self.mag_agent.config.interf.induced.susceptibility,
+        )
+        return scene.build(
+            cell_size=self.mag_agent.config.interf.induced.voxel_cell_size,
+            cache=True,
+            executor=ProcessExecutor(),
+        )
 
     @property
     def background_field(self):
@@ -83,10 +79,29 @@ class Simulation:
         rx_loc = np.array([astuple(d.location) for d in detectors.detectors])
         builder.receivers(rx_loc, ["bx", "by", "bz"])
         builder.vector_model()
-        builder.active_mesh(self.model_mesh)
+        builder.active_mesh(self.mag_agent_mesh)
         builder.store_sensitivities(True)
         induced_simulation = builder.build()
-        self._sensitivity = induced_simulation.G
+
+        G = induced_simulation.G
+        print(f"{G.shape=}")
+
+        bg_field_orienttation = (
+            self.background_field.get_orientations()
+        )  # shape: (flight_len, 3)
+        model_mag_direct = self.flight.att_rot.apply(
+            bg_field_orienttation, inverse=True
+        )  # shape: (flight_len, 3)
+        model_scalar = self.mag_agent_mesh.get_active_model().reshape(
+            (-1, 1)
+        )  # shape: (active_mesh_num, 1)
+        model_vector = np.einsum("i, jk -> jik", model_scalar[:, 0], model_mag_direct)
+        model_vector = model_vector.reshape(
+            (model_mag_direct.shape[0], model_scalar.shape[0] * 3),
+            order="F",
+        ).T  # shape: (active_mesh_num * 3, flight_len)
+        result = G @ model_vector # shape: (rx_num * 3, flight_len)
+        print(result.shape)
 
     def sample(self, detectors: DetectorCollection):
         return detectors

@@ -15,15 +15,10 @@ from dvmss.simulation import Simulation
 from dvmss.utils import CartesianCoord
 
 if __name__ == "__main__":
-    # 通过plot载体3D模型，确认导入模型在当前坐标系下的初始朝向、最长轴对应机身还是机翼
-    # cessna_172 = Path(__file__).resolve().parent / "cessna_172.stl"
-    # pv.read(cessna_172).plot(show_grid=True)
-    # 以这一cessna 172模型为例，最长轴对应机翼方向，初始机头朝向为y轴负方向
-    # 姿态一般yaw以从北顺时针为正，pitch以向上为正，roll以向右舷为正
-    # 若pitch旋转轴为x轴，roll旋转轴为y轴，yaw旋转轴为z轴
-    # 则姿态的地理坐标系y轴正方向为正北，x轴正方向为正东，z轴垂直于地平面向地为正，呈右手系
-    # 因此载体模型的初始朝向为正南向，由于后续计算均以载体朝向正北为初始，因此填入此信息后内部将自动旋转载体模型
-
+    # 各世界坐标系到笛卡尔坐标系xyz的关系：
+    # 1. pyvista笛卡尔坐标系：飞机机头朝向y轴正方向，右翼x轴正方向，z轴向上为正方向
+    # 2. 姿态坐标系：roll旋转轴->y，pitch旋转轴->x，yaw旋转轴-> -z
+    # 3. 地磁场坐标系：东北地NED，北->y，东->x，地->-z
     cessna_172_1_config = Path(__file__).resolve().parent / "cessna_172_1.yaml"
     mag_agent = MagAgent.setup_from_config(cessna_172_1_config)
     print(mag_agent)
@@ -74,5 +69,6 @@ if __name__ == "__main__":
 
     simluation = Simulation(mag_agent, IGRF, flight)
     simluation.compute_perm_interf_vector(detectors)
+    simluation.compute_induced_interf_vector(detectors)
     # sampled_detectors = simluation.sample(detectors)
     # print(sampled_detectors)

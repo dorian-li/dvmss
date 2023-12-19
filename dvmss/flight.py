@@ -6,6 +6,7 @@ from typing import List
 import numpy as np
 import pandas as pd
 from numpy.typing import ArrayLike
+from scipy.spatial.transform import Rotation as R
 
 from dvmss.utils import flatten_tuple
 
@@ -32,6 +33,17 @@ class Flight:
     @property
     def date(self):
         return self._date
+
+    @property
+    def att_rot(self):
+        att = self.query(VehicleState.PITCH, VehicleState.ROLL, VehicleState.YAW)
+        # 姿态坐标系z轴向下为正，而笛卡尔坐标系向上为正
+        att.loc[:, VehicleState.YAW] *= -1
+        return R.from_euler(
+            "xyz",
+            angles=att,
+            degrees=True,
+        )
 
     @classmethod
     def setup_from_pandas(cls, date: datetime, states: pd.DataFrame):
@@ -108,6 +120,6 @@ class Flight:
             }
         )
         return cls.setup_from_pandas(date, states)
-    
+
     def __repr__(self) -> str:
         return f"{self.date=}\n{self._states}"

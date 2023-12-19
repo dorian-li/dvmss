@@ -3,6 +3,7 @@ vehicle:
   actual_wingspan: 11.0
   actual_length: 8.3
   actual_height: 2.7
+  init_orientation: [0.0, -142.45333862304688, 0.0]
 
 interference:
   permanent_field:
