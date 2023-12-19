@@ -73,6 +73,6 @@ if __name__ == "__main__":
     )
 
     simluation = Simulation(mag_agent, IGRF, flight)
-    simluation.perm_interf(detectors)
+    simluation.compute_perm_interf_vector(detectors)
     # sampled_detectors = simluation.sample(detectors)
     # print(sampled_detectors)

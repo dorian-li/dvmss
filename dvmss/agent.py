@@ -1,87 +1,21 @@
-from dataclasses import dataclass
-from pathlib import Path
-
-import pyvista as pv
-from metalpy.mepa.process_executor import ProcessExecutor
-from metalpy.scab.modelling import Scene
-from metalpy.scab.modelling.shapes import Obj2
-from metalpy.scab.modelling.transform import Rotation
-from metalpy.utils.bounds import Bounds
-
-
-class VehicleAgentCreator:
-    def __init__(self, model_path, true_length, northward, longest_as_wing=True):
-        self.model_path = model_path
-        self.true_length = true_length
-        self.longest_as_wing = longest_as_wing
-        self.model = None
-        self.agent = None
-
-    def load_model(self):
-        self.model = pv.read(self.model_path)
-
-    def calculate_scaling_factor(self):
-        original_bounds = Bounds(self.model.bounds)
-        extents = original_bounds.extent
-        longest_axis_index = extents.index(
-            max(extents[:2])
-        )  # Compare x and y extents (0 and 1)
-        scale_axis_index = (
-            0 if self.longest_as_wing else 1
-        )  # Choose the opposite axis if longest_as_wing is False
-        if longest_axis_index != scale_axis_index:
-            scale_axis_index = longest_axis_index
-        scaling_factor = self.true_length / extents[scale_axis_index]
-        return scaling_factor
-
-    def rotate_to_north(self):
-        northward = Rotation(180, 0, 0, degrees=True, seq="zyx")
-        return northward
-
-    def create_agent(self):
-        scaling_factor = self.calculate_scaling_factor()
-        northward = self.rotate_to_north()
-        self.agent = Obj2(
-            model=self.model,
-            scale=scaling_factor,
-            surface_range=[-0.1, 0.1],
-            subdivide=True,
-            ignore_surface_check=True,
-        )
-        to_scene_center = -1 * self.agent.center
-        self.agent = self.agent.translate(*to_scene_center).apply(northward)
-
-    def build_scene(self):
-        scene = Scene()
-        scene.append(self.agent, models=1)
-        self.agent = scene.build(
-            cell_size=self.calculate_scaling_factor(),
-            cache=True,
-            executor=ProcessExecutor(),
-        )
-        return self.agent
-
-    def create_vehicle_agent(self):
-        self.load_model()
-        self.create_agent()
-        return self.build_scene()
-
-
-# 使用示例
-# creator = VehicleAgentCreator(
-#     "path_to/cessna_172.stl", true_length=11, longest_as_wing=True
-# )
-# agent = creator.create_vehicle_agent()
-
-
+from dataclasses import astuple, dataclass
 from os import PathLike
+from pathlib import Path
 from typing import Any, List, Optional
 
 import numpy as np
 import pyvista as pv
 import yaml
+from metalpy.mepa.process_executor import ProcessExecutor
+from metalpy.scab.modelling import Scene
+from metalpy.scab.modelling.shapes import Obj2
+from metalpy.scab.modelling.transform import Rotation
+from metalpy.utils.bounds import Bounds
+from pyvista.plotting import Plotter
+from pyvista.plotting.opts import ElementType
+from scipy.spatial.transform import Rotation as R
 
-from dvmss.utils import CartesianCoord
+from dvmss.utils import CartesianCoord, rotation_matrix_to_spatial_transformation_matrix
 
 
 @dataclass
@@ -94,6 +28,11 @@ class MagDipoleParam:
     def __post_init__(self):
         if self.moment_vector is None:
             self.moment_vector = self.moment * self.orientation
+        else:
+            if not np.allclose(self.moment_vector, self.moment * self.orientation):
+                raise ValueError(
+                    f"moment_vector must be moment * orientation: {self.moment_vector} != {self.moment} * {self.orientation}"
+                )
 
 
 @dataclass
@@ -108,10 +47,89 @@ class InducedParam:
 
 
 @dataclass
+class Orientation:
+    x: float
+    y: float
+    z: float
+
+    def to_numpy(self):
+        return np.array(astuple(self))
+
+
+@dataclass
 class VehicleParam:
-    model_3d: Any  # 载体3D模型
-    init_orientation: np.ndarray  # 载体初始方向
-    real_longest_axis_length: float  # 现实中此载体最长轴长度 (m)
+    model_3d: pv.DataSet  # 载体3D模型
+    actual_wingspan: float  # 机翼展长
+    actual_length: float  # 机身长度
+    actual_height: float  # 机身高度
+    init_orientation: Optional[Orientation] = None  # 载体3D模型初始朝向
+
+    def select_orientation_interactively(self):
+        orientation: Orientation = None
+
+        def callback(mesh):
+            nonlocal orientation
+            orientation = Orientation(
+                *(Bounds(mesh.bounds).center - Bounds(self.model_3d.bounds).center)
+            )
+            print(orientation)
+
+        pl = Plotter()
+        pl.add_mesh(self.model_3d)
+        pl.add_mesh(
+            pv.Cube(bounds=self.model_3d.bounds),
+            opacity=0.3,
+            show_edges=True,
+            pickable=True,
+        )
+        pl.add_axes()
+        pl.show_grid()
+        pl.enable_element_picking(
+            callback=callback,
+            mode=ElementType.FACE,
+        )
+        pl.add_text(
+            "when confirm vehicle heading, just close the window", position="lower_left"
+        )
+        pl.show(auto_close=False)
+        if orientation is None:
+            raise ValueError(
+                "The initial orientation is not specified. Please interactively select the face of the vehicle heading"
+            )
+        return orientation
+
+    def rotate_to_northward(self):
+        if self.init_orientation is None:
+            self.init_orientation = self.select_orientation_interactively()
+        to_northward_r = R.align_vectors(
+            self.init_orientation.to_numpy().reshape((1, 3)),
+            np.array([(0, 1, 0)]),  # y轴正方向为正北
+        )[0]
+        to_northward = rotation_matrix_to_spatial_transformation_matrix(
+            to_northward_r.as_matrix()
+        )
+        self.model_3d.transform(to_northward, inplace=True)
+
+    def move_to_center(self):
+        to_center = -1 * np.array(self.model_3d.center)
+        self.model_3d.translate(to_center, inplace=True)
+
+    def scale_to_actual_size(self):
+        bounds = Bounds(self.model_3d.bounds)  # 模型已经变化，重新计算包围盒
+        actual_size = np.array(
+            [self.actual_wingspan, self.actual_length, self.actual_height]
+        )
+        scale_factor: float = actual_size.max() / bounds.extent.max()
+        self.model_3d.scale(scale_factor, inplace=True)
+
+    def initialize_model(self):
+        self.rotate_to_northward()
+        self.move_to_center()
+        self.scale_to_actual_size()
+        # self.model_3d.plot(show_grid=True)
+
+    def __post_init__(self):
+        self.initialize_model()
 
 
 @dataclass
@@ -148,8 +166,12 @@ class MagAgent:
         vehicle = config["vehicle"]
         vehicle_param = VehicleParam(
             model_3d=pv.read(config_folder / Path(vehicle["model_3d"])),
-            init_orientation=vehicle["init_orientation"],
-            real_longest_axis_length=vehicle["real_longest_axis_length"],
+            actual_wingspan=vehicle["actual_wingspan"],
+            actual_length=vehicle["actual_length"],
+            actual_height=vehicle["actual_height"],
+            init_orientation=Orientation(*vehicle["init_orientation"])
+            if vehicle.get("init_orientation") is not None
+            else None,
         )
 
         perm_sources = []

@@ -29,3 +29,21 @@ def flatten_tuple(tup):
 def count_decimal_places(x: str):
     """计算浮点数文本的小数位数"""
     return Decimal(x).as_tuple().exponent * -1
+
+
+def rotation_matrix_to_spatial_transformation_matrix(
+    rotation_matrix: ArrayLike,
+) -> ArrayLike:
+    """将旋转矩阵转换为空间变换矩阵"""
+    if not isinstance(rotation_matrix, np.ndarray):
+        rotation_matrix = np.array(rotation_matrix)
+    if rotation_matrix.shape != (3, 3):
+        raise ValueError(
+            f"rotation_matrix shape must be (3, 3): {rotation_matrix.shape}"
+        )
+    return np.vstack(
+        (
+            np.hstack((rotation_matrix, np.zeros((3, 1)))),
+            np.array([0, 0, 0, 1]),
+        )
+    )

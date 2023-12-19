@@ -1,7 +1,8 @@
 vehicle:
   model_3d: "cessna_172.stl"
-  init_orientation: [0.0, 1.0, 0.0]
-  real_longest_axis_length: 11
+  actual_wingspan: 11.0
+  actual_length: 8.3
+  actual_height: 2.7
 
 interference:
   permanent_field:
