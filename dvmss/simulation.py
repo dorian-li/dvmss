@@ -4,17 +4,19 @@ from typing import List, Union
 
 import numpy as np
 from metalpy.mepa.process_executor import ProcessExecutor
+from metalpy.scab import Tied
 from metalpy.scab.builder.simulation_builder import SimulationBuilder
-from metalpy.scab.formatted.formatted import Formatted
+from metalpy.scab.formatted import Formatted
 from metalpy.scab.modelling import Scene
 from metalpy.scab.modelling.shapes import Obj2
 from metalpy.scab.modelling.transform import Rotation
 from metalpy.scab.potential_fields.magnetics.simulation import Simulation3DDipoles
+from metalpy.scab.utils.format import format_pandas
 from metalpy.utils.bounds import Bounds
 from SimPEG.potential_fields.magnetics.simulation import Simulation3DIntegral
 
 from .agent import MagAgent
-from .detector import DetectorCollection
+from .detector import DetectorCollection, MagSensor
 from .flight import Flight, VehicleState
 from .geomag import GeomagData, GeomagRefField
 
@@ -66,18 +68,25 @@ class Simulation:
         rx_loc = np.array([astuple(d.location) for d in detectors.detectors])
 
         builder_d.receivers(rx_loc, ["bx", "by", "bz"])
-        builder_d.patched(Formatted())
+        # builder_d.patched(Formatted())
         model = np.array(
             [s.moment_vector for s in self.mag_agent.config.interf.perm.sources]
         ).flatten("F")
-        d = builder_d.build().dpred(model)
-        return d
+        d = builder_d.build().dpred(model)  # shape(detector_num * 3,)
+        # fill by d, make shape(6,) to (6, 12301)
+        d = np.repeat(d[:, np.newaxis], len(self.flight._states), axis=1).T
+        print(d)
+        print(d.shape)
+        # for detector in detectors.detectors:
+        #     detector.sensor_data.loc[MagSensor.PREM_X] = d[, :]
+        return detectors
 
     def compute_induced_interf_vector(self, detectors: DetectorCollection):
+        components = ["bx", "by", "bz"]
         builder = SimulationBuilder.of(Simulation3DIntegral)
         builder.source_field(strength=1, inc=1, dec=1)
         rx_loc = np.array([astuple(d.location) for d in detectors.detectors])
-        builder.receivers(rx_loc, ["bx", "by", "bz"])
+        builder.receivers(rx_loc, components)
         builder.vector_model()
         builder.active_mesh(self.mag_agent_mesh)
         builder.store_sensitivities(True)
@@ -92,15 +101,16 @@ class Simulation:
         model_mag_direct = self.flight.att_rot.apply(
             bg_field_orienttation, inverse=True
         )  # shape: (flight_len, 3)
-        model_scalar = self.mag_agent_mesh.get_active_model().reshape(
-            (-1, 1)
-        )  # shape: (active_mesh_num, 1)
-        model_vector = np.einsum("i, jk -> jik", model_scalar[:, 0], model_mag_direct)
+        model_scalar = (
+            self.mag_agent_mesh.get_active_model()
+        )  # shape: (active_mesh_num, )
+        model_vector = np.einsum("i, jk -> jik", model_scalar, model_mag_direct)
         model_vector = model_vector.reshape(
             (model_mag_direct.shape[0], model_scalar.shape[0] * 3),
             order="F",
         ).T  # shape: (active_mesh_num * 3, flight_len)
-        result = G @ model_vector # shape: (rx_num * 3, flight_len)
+        result = G @ model_vector  # shape: (rx_num * 3, flight_len)
+        # ret = format_pandas(result, components, rx_loc)
         print(result.shape)
 
     def sample(self, detectors: DetectorCollection):

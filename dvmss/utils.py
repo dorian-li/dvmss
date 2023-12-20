@@ -4,6 +4,7 @@ from typing import List, Union
 
 import numpy as np
 import pandas as pd
+from metalpy.scab.utils.format import check_components
 from numpy.typing import ArrayLike
 
 
@@ -47,3 +48,16 @@ def rotation_matrix_to_spatial_transformation_matrix(
             np.array([0, 0, 0, 1]),
         )
     )
+
+
+def format_pandas(data, components, rx_loc):
+    components = check_components(components)
+    """将模拟结果转换为pandas.DataFrame"""
+    rx_num = rx_loc.shape[0]
+    flight_len = data.shape[1]
+    ret = pd.DataFrame(
+        data.reshape((rx_num * 3, flight_len), order="F").T,
+        columns=[f"{c}_{i}" for c in components for i in range(rx_num)],
+    )
+    ret["time"] = np.arange(flight_len)
+    return ret

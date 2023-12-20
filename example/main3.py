@@ -31,6 +31,8 @@ if __name__ == "__main__":
                 "tt",
                 "lon",
                 "lat",
+                "utm_x",
+                "utm_y",
                 "utm_z",
                 "ins_pitch",
                 "ins_roll",
@@ -40,6 +42,7 @@ if __name__ == "__main__":
         .take(include_line=True)
     )
     print(flt_d)
+
     date = datetime(2020, 6, 20)
     flight = Flight.setup_from_series(
         date=date,
