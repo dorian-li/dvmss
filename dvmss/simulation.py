@@ -18,7 +18,7 @@ from SimPEG.potential_fields.magnetics.simulation import Simulation3DIntegral
 from .agent import MagAgent
 from .detector import DetectorCollection, MagSensor
 from .flight import Flight, VehicleState
-from .geomag import GeomagData, GeomagRefField
+from .geomag import GeomagData, GeomagElem, GeomagRefField
 
 
 class Simulation:
@@ -59,33 +59,50 @@ class Simulation:
             )
         return self._cached_background_field
 
-    def compute_perm_interf_vector(self, detectors: DetectorCollection):
+    def compute_geomagnetic_field(self, detectors: DetectorCollection):
+        for detector in detectors:
+            detector.assign_sensor_data(
+                MagSensor.GEO_X,
+                self.background_field.query(GeomagElem.EAST),
+            )
+            detector.assign_sensor_data(
+                MagSensor.GEO_Y,
+                self.background_field.query(GeomagElem.NORTH),
+            )
+            detector.assign_sensor_data(
+                MagSensor.GEO_Z,
+                -1 * self.background_field.query(GeomagElem.VERTICAL),
+            )  # 地磁场坐标系向下为正，传感器坐标系向上为正
+        return detectors
+
+    def compute_permanent_interf(self, detectors: DetectorCollection):
         builder_d = SimulationBuilder.of(Simulation3DDipoles)
         sources = tuple(
             list(astuple(s.location)) for s in self.mag_agent.config.interf.perm.sources
         )
         builder_d.sources(*sources)
-        rx_loc = np.array([astuple(d.location) for d in detectors.detectors])
+        rx_loc = np.array([astuple(d.location) for d in detectors.items])
 
         builder_d.receivers(rx_loc, ["bx", "by", "bz"])
         # builder_d.patched(Formatted())
         model = np.array(
             [s.moment_vector for s in self.mag_agent.config.interf.perm.sources]
         ).flatten("F")
-        d = builder_d.build().dpred(model)  # shape(detector_num * 3,)
-        # fill by d, make shape(6,) to (6, 12301)
-        d = np.repeat(d[:, np.newaxis], len(self.flight._states), axis=1).T
-        print(d)
-        print(d.shape)
-        # for detector in detectors.detectors:
-        #     detector.sensor_data.loc[MagSensor.PREM_X] = d[, :]
+        perm_vectors = builder_d.build().dpred(model)  # shape(detector_num * 3,)
+        perm_vectors_expanded = np.repeat(
+            perm_vectors[:, np.newaxis], len(self.flight._states), axis=1
+        ).T  # (flight_len, detector_num * 3)
+        for i, detector in enumerate(detectors):
+            detector.assign_sensor_data(MagSensor.PREM_X, perm_vectors_expanded[:, 3 * i])
+            detector.assign_sensor_data(MagSensor.PREM_Y, perm_vectors_expanded[:, 3 * i + 1])
+            detector.assign_sensor_data(MagSensor.PREM_Z, perm_vectors_expanded[:, 3 * i + 2])
         return detectors
 
-    def compute_induced_interf_vector(self, detectors: DetectorCollection):
+    def compute_induced_interf(self, detectors: DetectorCollection):
         components = ["bx", "by", "bz"]
         builder = SimulationBuilder.of(Simulation3DIntegral)
         builder.source_field(strength=1, inc=1, dec=1)
-        rx_loc = np.array([astuple(d.location) for d in detectors.detectors])
+        rx_loc = np.array([astuple(d.location) for d in detectors.items])
         builder.receivers(rx_loc, components)
         builder.vector_model()
         builder.active_mesh(self.mag_agent_mesh)
@@ -114,4 +131,9 @@ class Simulation:
         print(result.shape)
 
     def sample(self, detectors: DetectorCollection):
+        detectors = self.compute_geomagnetic_field(detectors)
+        detectors = self.compute_permanent_interf(detectors)
+        detectors = self.compute_induced_interf(detectors)
+        detectors = self.merge_sensor_component(detectors)
+
         return detectors

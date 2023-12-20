@@ -71,7 +71,7 @@ if __name__ == "__main__":
     )
 
     simluation = Simulation(mag_agent, IGRF, flight)
-    simluation.compute_perm_interf_vector(detectors)
-    simluation.compute_induced_interf_vector(detectors)
+    simluation.compute_permanent_interf(detectors)
+    simluation.compute_induced_interf(detectors)
     # sampled_detectors = simluation.sample(detectors)
     # print(sampled_detectors)
