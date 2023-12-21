@@ -18,7 +18,9 @@ if __name__ == "__main__":
     # 各世界坐标系到笛卡尔坐标系xyz的关系：
     # 1. pyvista笛卡尔坐标系：飞机机头朝向y轴正方向，右翼x轴正方向，z轴向上为正方向
     # 2. 姿态坐标系：roll旋转轴->y，pitch旋转轴->x，yaw旋转轴-> -z
-    # 3. 地磁场坐标系：东北地NED，北->y，东->x，地->-z
+    # (x, y, z) => (roll, pitch, yaw), NED
+    # 3. 地磁场坐标系 (x,y,z)=>(northing, east, downward), NED
+    # 4. simpeg: (x,y,z)=>(easting, northing, upward), ENU
     cessna_172_1_config = Path(__file__).resolve().parent / "cessna_172_1.yaml"
     mag_agent = MagAgent.setup_from_config(cessna_172_1_config)
     print(mag_agent)
@@ -71,7 +73,27 @@ if __name__ == "__main__":
     )
 
     simluation = Simulation(mag_agent, IGRF, flight)
-    simluation.compute_permanent_interf(detectors)
-    simluation.compute_induced_interf(detectors)
-    # sampled_detectors = simluation.sample(detectors)
-    # print(sampled_detectors)
+    sampled_detectors = simluation.sample(detectors)
+    d = sampled_detectors.items[0]
+    import matplotlib.pyplot as plt
+
+    from dvmss.detector import MagSensor
+
+    # plt.plot(d.sensor_data[MagSensor.B_X], label="bx")
+    # plt.plot(d.sensor_data[MagSensor.B_Y], label="by")
+    # plt.plot(d.sensor_data[MagSensor.B_Z], label="bz")
+    # plt.plot(d.sensor_data[MagSensor.GEO_X], label="geo_x")
+    # plt.plot(d.sensor_data[MagSensor.GEO_Y], label="geo_y")
+    # plt.plot(d.sensor_data[MagSensor.GEO_Z], label="geo_z")
+    # plt.plot(d.sensor_data[MagSensor.TMI], label="tmi")
+    # plt.plot(d.sensor_data[MagSensor.GEO_T], label="geo_t")
+    # plt.plot(d.sensor_data[MagSensor.PERM_X], label="perm_x")
+    # plt.plot(d.sensor_data[MagSensor.PERM_Y], label="perm_x")
+    # plt.plot(d.sensor_data[MagSensor.PERM_Z], label="perm_x")
+    plt.plot(d.sensor_data[MagSensor.PERM_TMI], label="perm_tmi")
+    # plt.plot(d.sensor_data[MagSensor.INDUCED_X], label="induced_x")
+    # plt.plot(d.sensor_data[MagSensor.INDUCED_Y], label="induced_y")
+    # plt.plot(d.sensor_data[MagSensor.INDUCED_Z], label="induced_z")
+    # plt.plot(d.sensor_data[MagSensor.INDUCED_TMI], label="induced_tmi")
+    plt.legend()
+    plt.show()

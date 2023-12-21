@@ -56,37 +56,37 @@ class GeomagData:
         return dip_azimuth2cartesian(
             self._data[GeomagElem.INCLINATION],
             self._data[GeomagElem.DECLINATION],
-        )
+        )  # ENU
 
     @classmethod
-    def make_from_NED(cls, north: ArrayLike, east: ArrayLike, vertical: ArrayLike):
-        """由北向分量、东向分量、垂直向分量经验证后构造完整GeomagData"""
+    def make_from_ENU(cls, easting: ArrayLike, northing: ArrayLike, upward: ArrayLike):
+        """由东向分量、北向分量、垂直向上分量经验证后构造完整GeomagData"""
 
-        north = np.array(north)
-        east = np.array(east)
-        vertical = np.array(vertical)
+        easting = np.array(easting)
+        northing = np.array(northing)
+        downward = np.array(-upward)
 
-        if north.shape != east.shape or north.shape != vertical.shape:
+        if northing.shape != easting.shape or northing.shape != downward.shape:
             raise ValueError("north, east and vertical must be the same shape")
 
-        if np.ndim(north) != 1:
+        if np.ndim(northing) != 1:
             raise ValueError("north, east and vertical must be 1D")
 
-        horizontal = np.sqrt(north**2 + east**2)
-        declination = np.rad2deg(np.arctan2(east, north))
-        inclination = np.rad2deg(np.arctan2(vertical, horizontal))
-        total = np.sqrt(north**2 + east**2 + vertical**2)
+        horizontal = np.sqrt(northing**2 + easting**2)
+        declination = np.rad2deg(np.arctan2(easting, northing))
+        inclination = np.rad2deg(np.arctan2(downward, horizontal))
+        total = np.sqrt(northing**2 + easting**2 + downward**2)
         return cls.setup_from_pandas(
             pd.DataFrame(
                 {
-                    GeomagElem.NORTH: north,
-                    GeomagElem.EAST: east,
-                    GeomagElem.VERTICAL: vertical,
+                    GeomagElem.NORTH: northing,
+                    GeomagElem.EAST: easting,
+                    GeomagElem.VERTICAL: downward,
                     GeomagElem.HORIZONTAL: horizontal,
                     GeomagElem.DECLINATION: declination,
                     GeomagElem.INCLINATION: inclination,
                     GeomagElem.TOTAL: total,
-                }
+                }  # NED
             )
         )
 
@@ -111,21 +111,21 @@ class IGRF(GeomagRefField):
         date: datetime,
         longitude: ArrayLike,
         latitude: ArrayLike,
-        elevation: ArrayLike,
+        elevation: ArrayLike,  # 米
     ) -> GeomagData:
         """通过IGRF模型，查询某一日期、某一地理位置的参考地磁场数据"""
         longitude = np.array(longitude)
         latitude = np.array(latitude)
-        elevation = np.array(elevation)
+        elevation = np.array(elevation) / 1000  # 单位转换为千米
 
         b_e, b_n, b_u = ppigrf.igrf(
             longitude,
             latitude,
             elevation,
             date,
-        )  # 大地坐标系，z轴向上为正
+        )  # 东北天坐标系
         # 默认输出shape为(1, n)，将其转换为(n,)
         b_e = np.array(b_e).flatten()
         b_n = np.array(b_n).flatten()
         b_u = np.array(b_u).flatten()
-        return GeomagData.make_from_NED(b_n, b_e, -b_u)  # 地磁场坐标系，z轴向下为正
+        return GeomagData.make_from_ENU(b_e, b_n, b_u)

@@ -53,12 +53,12 @@ def test_geomag_data_setup_from_pandas_invalid_element():
         geomags = GeomagData.setup_from_pandas(invalid_df)
 
 
-def test_geomag_data_make_from_NED():
+def test_geomag_data_make_from_NEU():
     """GeomagData.make_from_XYZ应该能够根据XYZ分量数组，正确构造拥有完整地磁七要素的数组"""
-    geomags = GeomagData.make_from_NED(
-        desired[GeomagElem.NORTH],
+    geomags = GeomagData.make_from_ENU(
         desired[GeomagElem.EAST],
-        desired[GeomagElem.VERTICAL],
+        desired[GeomagElem.NORTH],
+        -1 * desired[GeomagElem.VERTICAL],
     )
     assert isinstance(geomags, GeomagData)
     assert_almost_equal(
@@ -100,10 +100,10 @@ def test_geomag_data_make_from_NED():
 
 def test_geomag_data_query():
     """GeomagData.query应该能够根据地磁七要素的名称，查询对应的数据"""
-    geomags = GeomagData.make_from_NED(
-        desired[GeomagElem.NORTH],
+    geomags = GeomagData.make_from_ENU(
         desired[GeomagElem.EAST],
-        desired[GeomagElem.VERTICAL],
+        desired[GeomagElem.NORTH],
+        -1 * desired[GeomagElem.VERTICAL],
     )
     assert_allclose(
         geomags.query(GeomagElem.NORTH),

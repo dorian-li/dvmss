@@ -23,10 +23,10 @@ class MagSensor(Enum):
     B_Y = auto()
     B_Z = auto()
     TMI = auto()
-    PREM_X = auto()
-    PREM_Y = auto()
-    PREM_Z = auto()
-    PREM_TMI = auto()
+    PERM_X = auto()
+    PERM_Y = auto()
+    PERM_Z = auto()
+    PERM_TMI = auto()
     INDUCED_X = auto()
     INDUCED_Y = auto()
     INDUCED_Z = auto()
@@ -62,3 +62,6 @@ class DetectorCollection:
 
     def __iter__(self):
         return iter(self.items)
+
+    def __repr__(self) -> str:
+        return repr(self.items)

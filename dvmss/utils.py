@@ -50,14 +50,24 @@ def rotation_matrix_to_spatial_transformation_matrix(
     )
 
 
-def format_pandas(data, components, rx_loc):
-    components = check_components(components)
-    """将模拟结果转换为pandas.DataFrame"""
-    rx_num = rx_loc.shape[0]
-    flight_len = data.shape[1]
-    ret = pd.DataFrame(
-        data.reshape((rx_num * 3, flight_len), order="F").T,
-        columns=[f"{c}_{i}" for c in components for i in range(rx_num)],
-    )
-    ret["time"] = np.arange(flight_len)
-    return ret
+def project_vectors_to_orientations(
+    vectors: ArrayLike, orientations: ArrayLike
+) -> ArrayLike:
+    """将一组三维向量投影到另一组方向上"""
+    vectors = np.array(vectors)
+    orientations = np.array(orientations)
+    if vectors.shape[0] != orientations.shape[0]:
+        raise ValueError(
+            f"vectors and orientations must have same length: {vectors.shape[0]} != {orientations.shape[0]}"
+        )
+    if vectors.shape[1] != 3:
+        raise ValueError(f"vectors shape must be (n, 3): {vectors.shape}")
+    return np.einsum("ij, ij -> i", vectors, orientations)  # shape: (n, )
+
+
+def NED_to_ENU(x: ArrayLike):
+    """将北东地坐标系转换为东北天坐标系"""
+    x = np.array(x)
+    if x.shape[1] != 3:
+        raise ValueError(f"vectors shape must be (n, 3): {x.shape}")
+    return np.column_stack((x[:, 1], x[:, 0], -x[:, 2]))

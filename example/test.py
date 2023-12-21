@@ -1,26 +1,23 @@
+import os
+
+os.sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from datetime import datetime
+
 import numpy as np
 from numpy.testing import assert_allclose
 
-# 创建示例数组
-a = np.random.rand(101, 1)  # 形状为 (101, 1)
-b = np.random.rand(123, 3)  # 形状为 (123, 3)
+from dvmss.geomag import IGRF, GeomagElem
 
-# 使用 numpy.einsum 进行高维数组乘法
-# 我们希望对 a 的每个标量和 b 的每个矢量进行乘法，得到一个 (123, 101, 3) 的数组
-result = np.einsum("i, jk -> jik", a[:, 0], b)
-
-# 将结果数组重塑为 (123, 303) 的形状，使用 Fortran 的列存储格式
-final_result = result.reshape(123, 303, order="F")
-
-b_0 = b[1, :].reshape(((1, -1)))  # shape (1, 3)
-tmp = a @ b_0
-print(f"{tmp.shape=}")
-tmp_F = tmp.flatten("F")
-print(f"{tmp_F.shape=}")
-print(f"{tmp_F=}")
-print(f"{final_result[1, :]=}")
-
-print(final_result.shape)
-
-assert_allclose(final_result[0, :], tmp_F)
-print(final_result.shape)
+geo_igrf = IGRF.query(
+    date=datetime(2022, 1, 1),
+    longitude=-113.64250,
+    latitude=60.10861,
+    elevation=0,
+)
+orient = geo_igrf.get_orientations()
+orient_2 = (
+    geo_igrf.query(GeomagElem.NORTH, GeomagElem.EAST, GeomagElem.VERTICAL).to_numpy()
+    / geo_igrf.query(GeomagElem.TOTAL).to_numpy()
+)
+print(orient)  # ENU
+print(orient_2)  # NED

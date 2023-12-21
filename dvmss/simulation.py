@@ -19,6 +19,7 @@ from .agent import MagAgent
 from .detector import DetectorCollection, MagSensor
 from .flight import Flight, VehicleState
 from .geomag import GeomagData, GeomagElem, GeomagRefField
+from .utils import NED_to_ENU, project_vectors_to_orientations
 
 
 class Simulation:
@@ -51,89 +52,164 @@ class Simulation:
     @property
     def background_field(self):
         if self._cached_background_field is None:
-            return self.geomag.query(
+            self._cached_background_field = self.geomag.query(
                 self.flight.date,
                 self.flight.query(VehicleState.LATITUDE),
                 self.flight.query(VehicleState.LONGITUDE),
                 self.flight.query(VehicleState.ELEVATION),
-            )
+            )  # NED坐标系
         return self._cached_background_field
 
-    def compute_geomagnetic_field(self, detectors: DetectorCollection):
+    @property
+    def tmi_projections(self):
+        return self.flight.att_rot.apply(
+            self.background_field.get_orientations(), inverse=True
+        )  # (flight_len, 3), ENU坐标系
+
+    def compute_background_field_vector(self, detectors: DetectorCollection):
+        bg_NED = self.background_field.query(
+            GeomagElem.NORTH, GeomagElem.EAST, GeomagElem.VERTICAL
+        )  # NED坐标系
+        bg_body_frame = self.flight.att_rot.apply(
+            NED_to_ENU(bg_NED.to_numpy()),
+            inverse=True,
+        )  # shape: (flight_len, 3)
         for detector in detectors:
-            detector.assign_sensor_data(
-                MagSensor.GEO_X,
-                self.background_field.query(GeomagElem.EAST),
-            )
-            detector.assign_sensor_data(
-                MagSensor.GEO_Y,
-                self.background_field.query(GeomagElem.NORTH),
-            )
-            detector.assign_sensor_data(
-                MagSensor.GEO_Z,
-                -1 * self.background_field.query(GeomagElem.VERTICAL),
-            )  # 地磁场坐标系向下为正，传感器坐标系向上为正
+            # to ENU坐标系
+            detector.assign_sensor_data(MagSensor.GEO_X, bg_body_frame[:, 0])
+            detector.assign_sensor_data(MagSensor.GEO_Y, bg_body_frame[:, 1])
+            detector.assign_sensor_data(MagSensor.GEO_Z, bg_body_frame[:, 2])
         return detectors
 
-    def compute_permanent_interf(self, detectors: DetectorCollection):
-        builder_d = SimulationBuilder.of(Simulation3DDipoles)
-        sources = tuple(
+    def compute_permanent_interf_vector(self, detectors: DetectorCollection):
+        builder = SimulationBuilder.of(Simulation3DDipoles)
+        source_locs = tuple(
             list(astuple(s.location)) for s in self.mag_agent.config.interf.perm.sources
         )
-        builder_d.sources(*sources)
-        rx_loc = np.array([astuple(d.location) for d in detectors.items])
+        builder.sources(*source_locs)
+        detector_locs = np.array([astuple(d.location) for d in detectors.items])
 
-        builder_d.receivers(rx_loc, ["bx", "by", "bz"])
-        # builder_d.patched(Formatted())
+        builder.receivers(detector_locs, ["bx", "by", "bz"])
         model = np.array(
             [s.moment_vector for s in self.mag_agent.config.interf.perm.sources]
-        ).flatten("F")
-        perm_vectors = builder_d.build().dpred(model)  # shape(detector_num * 3,)
+        ).flatten(
+            "F"
+        )  # (source_num * 3,)
+        perm_vectors = builder.build().dpred(model)  # (detector_num * 3,)
         perm_vectors_expanded = np.repeat(
             perm_vectors[:, np.newaxis], len(self.flight._states), axis=1
         ).T  # (flight_len, detector_num * 3)
         for i, detector in enumerate(detectors):
-            detector.assign_sensor_data(MagSensor.PREM_X, perm_vectors_expanded[:, 3 * i])
-            detector.assign_sensor_data(MagSensor.PREM_Y, perm_vectors_expanded[:, 3 * i + 1])
-            detector.assign_sensor_data(MagSensor.PREM_Z, perm_vectors_expanded[:, 3 * i + 2])
+            detector.assign_sensor_data(
+                MagSensor.PERM_X, perm_vectors_expanded[:, 3 * i]
+            )
+            detector.assign_sensor_data(
+                MagSensor.PERM_Y, perm_vectors_expanded[:, 3 * i + 1]
+            )
+            detector.assign_sensor_data(
+                MagSensor.PERM_Z, perm_vectors_expanded[:, 3 * i + 2]
+            )
         return detectors
 
-    def compute_induced_interf(self, detectors: DetectorCollection):
+    def compute_induced_interf_vector(self, detectors: DetectorCollection):
         components = ["bx", "by", "bz"]
         builder = SimulationBuilder.of(Simulation3DIntegral)
         builder.source_field(strength=1, inc=1, dec=1)
-        rx_loc = np.array([astuple(d.location) for d in detectors.items])
-        builder.receivers(rx_loc, components)
+        dectector_locs = np.array([astuple(d.location) for d in detectors.items])
+        builder.receivers(dectector_locs, components)
         builder.vector_model()
         builder.active_mesh(self.mag_agent_mesh)
         builder.store_sensitivities(True)
-        induced_simulation = builder.build()
 
-        G = induced_simulation.G
-        print(f"{G.shape=}")
-
-        bg_field_orienttation = (
-            self.background_field.get_orientations()
-        )  # shape: (flight_len, 3)
-        model_mag_direct = self.flight.att_rot.apply(
-            bg_field_orienttation, inverse=True
-        )  # shape: (flight_len, 3)
-        model_scalar = (
-            self.mag_agent_mesh.get_active_model()
-        )  # shape: (active_mesh_num, )
-        model_vector = np.einsum("i, jk -> jik", model_scalar, model_mag_direct)
+        kernel = builder.build().G  # (detector_num * 3, active_mesh_num * 3)
+        model_mag_direct = self.tmi_projections  # (flight_len, 3)
+        model_scalar = self.mag_agent_mesh.get_active_model()  # (active_mesh_num, )
+        # TODO: 因为每一个体素网格的磁化方向都是一样的，可以只计算一个来优化👇
+        model_vector = np.einsum(
+            "i, jk -> jik", model_scalar, model_mag_direct
+        )  # (flight_len, active_mesh_num, 3)
         model_vector = model_vector.reshape(
             (model_mag_direct.shape[0], model_scalar.shape[0] * 3),
             order="F",
-        ).T  # shape: (active_mesh_num * 3, flight_len)
-        result = G @ model_vector  # shape: (rx_num * 3, flight_len)
-        # ret = format_pandas(result, components, rx_loc)
-        print(result.shape)
+        ).T  # (active_mesh_num * 3, flight_len)
+        induced_vectors = kernel @ model_vector  # (detector_num * 3, flight_len)
+        induced_vectors = induced_vectors.T  # (flight_len, detector_num * 3)
+
+        for i, detector in enumerate(detectors):
+            detector.assign_sensor_data(MagSensor.INDUCED_X, induced_vectors[:, 3 * i])
+            detector.assign_sensor_data(
+                MagSensor.INDUCED_Y, induced_vectors[:, 3 * i + 1]
+            )
+            detector.assign_sensor_data(
+                MagSensor.INDUCED_Z, induced_vectors[:, 3 * i + 2]
+            )
+        return detectors
+
+    def merge_sensor_vector_component(self, detectors: DetectorCollection):
+        for detector in detectors:
+            detector.assign_sensor_data(
+                MagSensor.B_X,
+                detector.sensor_data[MagSensor.GEO_X]
+                + detector.sensor_data[MagSensor.PERM_X]
+                + detector.sensor_data[MagSensor.INDUCED_X],
+            )
+            detector.assign_sensor_data(
+                MagSensor.B_Y,
+                detector.sensor_data[MagSensor.GEO_Y]
+                + detector.sensor_data[MagSensor.PERM_Y]
+                + detector.sensor_data[MagSensor.INDUCED_Y],
+            )
+            detector.assign_sensor_data(
+                MagSensor.B_Z,
+                detector.sensor_data[MagSensor.GEO_Z]
+                + detector.sensor_data[MagSensor.PERM_Z]
+                + detector.sensor_data[MagSensor.INDUCED_Z],
+            )
+        return detectors
+
+    def compute_tmi(self, detectors: DetectorCollection):
+        for detector in detectors:
+            detector.assign_sensor_data(
+                MagSensor.TMI,
+                project_vectors_to_orientations(
+                    detector.sensor_data[[MagSensor.B_X, MagSensor.B_Y, MagSensor.B_Z]],
+                    self.tmi_projections,
+                ),
+            )
+            detector.assign_sensor_data(
+                MagSensor.PERM_TMI,
+                project_vectors_to_orientations(
+                    detector.sensor_data[
+                        [MagSensor.PERM_X, MagSensor.PERM_Y, MagSensor.PERM_Z]
+                    ],
+                    self.tmi_projections,
+                ),
+            )
+            detector.assign_sensor_data(
+                MagSensor.INDUCED_TMI,
+                project_vectors_to_orientations(
+                    detector.sensor_data[
+                        [MagSensor.INDUCED_X, MagSensor.INDUCED_Y, MagSensor.INDUCED_Z]
+                    ],
+                    self.tmi_projections,
+                ),
+            )
+            detector.assign_sensor_data(
+                MagSensor.GEO_T,
+                np.linalg.norm(
+                    detector.sensor_data[
+                        [MagSensor.GEO_X, MagSensor.GEO_Y, MagSensor.GEO_Z]
+                    ],
+                    axis=1,
+                ),
+            )
+        return detectors
 
     def sample(self, detectors: DetectorCollection):
-        detectors = self.compute_geomagnetic_field(detectors)
-        detectors = self.compute_permanent_interf(detectors)
-        detectors = self.compute_induced_interf(detectors)
-        detectors = self.merge_sensor_component(detectors)
+        detectors = self.compute_background_field_vector(detectors)
+        detectors = self.compute_permanent_interf_vector(detectors)
+        detectors = self.compute_induced_interf_vector(detectors)
+        detectors = self.merge_sensor_vector_component(detectors)
+        detectors = self.compute_tmi(detectors)
 
         return detectors

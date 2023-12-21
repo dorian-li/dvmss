@@ -19,7 +19,7 @@ class VehicleState(Enum):
     LATITUDE = auto()  # 纬度(degree)
     ELEVATION = auto()  # 海拔高度(m)
 
-    # 飞行姿态
+    # 飞行姿态 (NED坐标系)
     ROLL = auto()  # 以向右舷为正(degree)
     PITCH = auto()  # 以向上为正(degree)
     YAW = auto()  # 以从北顺时针为正(degree)
@@ -36,14 +36,16 @@ class Flight:
 
     @property
     def att_rot(self):
-        att = self.query(VehicleState.PITCH, VehicleState.ROLL, VehicleState.YAW)
-        # 姿态坐标系z轴向下为正，而笛卡尔坐标系向上为正
-        att.loc[:, VehicleState.YAW] *= -1
+        att_NED = self.query(
+            VehicleState.ROLL, VehicleState.PITCH, VehicleState.YAW
+        ).to_numpy()
+        # NED to ENU
+        att_ENU = np.column_stack((att_NED[:, 1], att_NED[:, 0], -att_NED[:, 2] + 90))
         return R.from_euler(
-            "xyz",
-            angles=att,
+            "zxy",
+            angles=att_ENU,
             degrees=True,
-        )
+        )  # yaw-pitch-roll顺序旋转
 
     @classmethod
     def setup_from_pandas(cls, date: datetime, states: pd.DataFrame):

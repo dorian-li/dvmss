@@ -8,14 +8,14 @@ vehicle:
 interference:
   permanent_field:
     sources:
-      - location: [1.0, 0.0, 0.0]
-        orientation: [0.707, 0.707, 0.0]
-        moment: 5.0
+      - orientation: [0.707, 0.707, 0.0]
+        moment: 50
+        location: [1.0, 0.0, 0.0]
 
-      - location: [0.0, 1.0, 0.0]
-        orientation: [-0.707, 0.707, 0.0]
-        moment: 3.0
+      - orientation: [-0.707, 0.707, 0.0]
+        moment: 30
+        location: [0.0, 1.0, 0.0]
 
   induced_field:
     voxel_cell_size: 0.1
-    susceptibility: 0.05
+    susceptibility: 500
