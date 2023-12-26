@@ -15,6 +15,10 @@ class CartesianCoord:
     y: float
     z: float
 
+    @classmethod
+    def from_list(cls, l):
+        return cls(*l)
+
 
 def flatten_tuple(tup):
     """将嵌套的tuple展开为一维的tuple""" ""

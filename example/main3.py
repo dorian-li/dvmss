@@ -7,7 +7,7 @@ from pathlib import Path
 import pyvista as pv
 from sgl2020 import SGL2020
 
-from dvmss.agent import InducedParam, MagAgent, PermParam, VehicleParam
+from dvmss.agent import MagAgent
 from dvmss.detector import Detector, DetectorCollection, MagSensorType
 from dvmss.flight import Flight
 from dvmss.geomag import IGRF
@@ -22,7 +22,7 @@ if __name__ == "__main__":
     # 3. 地磁场坐标系 (x,y,z)=>(northing, east, downward), NED
     # 4. simpeg: (x,y,z)=>(easting, northing, upward), ENU
     cessna_172_1_config = Path(__file__).resolve().parent / "cessna_172_1.yaml"
-    mag_agent = MagAgent.setup_from_config(cessna_172_1_config)
+    mag_agent = MagAgent(cessna_172_1_config)
     print(mag_agent)
 
     surv = SGL2020()
@@ -61,13 +61,28 @@ if __name__ == "__main__":
 
     detectors = DetectorCollection.of(
         Detector(
-            location=CartesianCoord(0, 0, 0),
+            location=CartesianCoord(-2.8, 1.1, 0.32),
             sensor_type=MagSensorType.SCALAR,
             # loc_interactive=True,
         ),
         Detector(
-            location=CartesianCoord(0, 0, 0),
-            sensor_type=MagSensorType.VECTOR,
+            location=CartesianCoord(2.8, 1.1, 0.32),
+            sensor_type=MagSensorType.SCALAR,
+            # loc_interactive=True,
+        ),
+        Detector(
+            location=CartesianCoord(-5.5, 1.1, 0.32),
+            sensor_type=MagSensorType.SCALAR,
+            # loc_interactive=True,
+        ),
+        Detector(
+            location=CartesianCoord(5.5, 1.1, 0.32),
+            sensor_type=MagSensorType.SCALAR,
+            # loc_interactive=True,
+        ),
+        Detector(
+            location=CartesianCoord(0, -8, -0.7),
+            sensor_type=MagSensorType.SCALAR,
             # loc_interactive=True,
         ),
     )
@@ -94,6 +109,6 @@ if __name__ == "__main__":
     # plt.plot(d.sensor_data[MagSensor.INDUCED_X], label="induced_x")
     # plt.plot(d.sensor_data[MagSensor.INDUCED_Y], label="induced_y")
     # plt.plot(d.sensor_data[MagSensor.INDUCED_Z], label="induced_z")
-    # plt.plot(d.sensor_data[MagSensor.INDUCED_TMI], label="induced_tmi")
+    plt.plot(d.sensor_data[MagSensor.INDUCED_TMI], label="induced_tmi")
     plt.legend()
     plt.show()

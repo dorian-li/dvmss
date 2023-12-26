@@ -41,10 +41,10 @@ class Simulation:
                 subdivide=True,
                 ignore_surface_check=True,
             ),
-            models=self.mag_agent.config.interf.induced.susceptibility,
+            models=self.mag_agent.config.interference.induced_field.susceptibility,
         )
         return scene.build(
-            cell_size=self.mag_agent.config.interf.induced.voxel_cell_size,
+            cell_size=self.mag_agent.config.interference.induced_field.voxel_cell_size,
             cache=True,
             executor=ProcessExecutor(),
         )
@@ -84,14 +84,14 @@ class Simulation:
     def compute_permanent_interf_vector(self, detectors: DetectorCollection):
         builder = SimulationBuilder.of(Simulation3DDipoles)
         source_locs = tuple(
-            list(astuple(s.location)) for s in self.mag_agent.config.interf.perm.sources
+            list(astuple(s.location)) for s in self.mag_agent.config.interference.permanent_field.sources
         )
         builder.sources(*source_locs)
         detector_locs = np.array([astuple(d.location) for d in detectors.items])
 
         builder.receivers(detector_locs, ["bx", "by", "bz"])
         model = np.array(
-            [s.moment_vector for s in self.mag_agent.config.interf.perm.sources]
+            [s.moment_vector.to_numpy() for s in self.mag_agent.config.interference.permanent_field.sources]
         ).flatten(
             "F"
         )  # (source_num * 3,)

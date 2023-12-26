@@ -1,5 +1,5 @@
 vehicle:
-  model_3d: "cessna_172.stl"
+  model_3d_path: "C:/Users/Dorian/repos/dvmss/example/cessna_172.stl"
   actual_wingspan: 11.0
   actual_length: 8.3
   actual_height: 2.7
@@ -8,14 +8,14 @@ vehicle:
 interference:
   permanent_field:
     sources:
-      - orientation: [0.707, 0.707, 0.0]
-        moment: 50
-        location: [1.0, 0.0, 0.0]
+      - orientation: [0.9848077, 0.0, -0.17364818]
+        moment: 44000
+        location: [0.0, 1.9, 0.0]
 
-      - orientation: [-0.707, 0.707, 0.0]
-        moment: 30
-        location: [0.0, 1.0, 0.0]
+      - orientation: [-9.84807753e-01, 1.20604166e-16, 1.73648178e-01]
+        moment: 55000
+        location: [0.0, 2.7, 0.0]
 
   induced_field:
     voxel_cell_size: 0.1
-    susceptibility: 500
+    susceptibility: 2.5e-5

@@ -1,10 +1,13 @@
-from dataclasses import astuple, dataclass
+import os
+from dataclasses import astuple, dataclass, field
 from os import PathLike
 from pathlib import Path
 from typing import Any, List, Optional
 
+import dacite
 import numpy as np
 import pyvista as pv
+import schema as sc
 import yaml
 from metalpy.mepa.process_executor import ProcessExecutor
 from metalpy.scab.modelling import Scene
@@ -19,58 +22,86 @@ from dvmss.utils import CartesianCoord, rotation_matrix_to_spatial_transformatio
 
 
 @dataclass
-class MagDipoleParam:
-    location: CartesianCoord  # 磁偶极子笛卡尔坐标系位置
-    orientation: np.ndarray  # 磁偶极子方向，归一化单位矢量
-    moment: float  # 磁偶极子振幅 (A/m^2)
-    moment_vector: Optional[np.ndarray] = None  # 磁偶极子磁矩矢量
+class CartesianOrientation:
+    x: float = 0.0
+    y: float = 0.0
+    z: float = 0.0
+
+    def to_numpy(self):
+        return np.array(astuple(self))
+
+    @classmethod
+    def from_list(cls, l):
+        return cls(*l)
+
+
+@dataclass
+class NormalizedUnitVector(CartesianOrientation):
+    def to_numpy(self):
+        return super().to_numpy()
+
+    @classmethod
+    def from_list(cls, l):
+        return super().from_list(l)
 
     def __post_init__(self):
+        norm = np.linalg.norm(self.to_numpy())
+        self.x /= norm
+        self.y /= norm
+        self.z /= norm
+
+
+@dataclass
+class FieldSourceConfig:
+    orientation: NormalizedUnitVector  # 磁偶极子方向，归一化单位矢量
+    moment: float  # 磁偶极子振幅 (A/m^2)
+    location: CartesianCoord  # 磁偶极子笛卡尔坐标系位置
+    moment_vector: Optional[CartesianOrientation] = None  # 磁偶极子磁矩矢量
+
+    def __post_init__(self):
+        expected_moment_vector = self.moment * self.orientation.to_numpy()
         if self.moment_vector is None:
-            self.moment_vector = self.moment * self.orientation
+            self.moment_vector = CartesianOrientation(*expected_moment_vector)
         else:
-            if not np.allclose(self.moment_vector, self.moment * self.orientation):
+            if not np.allclose(self.moment_vector.to_numpy(), expected_moment_vector):
                 raise ValueError(
                     f"moment_vector must be moment * orientation: {self.moment_vector} != {self.moment} * {self.orientation}"
                 )
 
 
 @dataclass
-class PermParam:
-    sources: List[MagDipoleParam]  # 一系列磁偶极子作为恒定场干扰场源
+class PermanentFieldConfig:
+    sources: List[FieldSourceConfig] = field(default_factory=list)  # 一系列磁偶极子作为恒定场干扰场源
 
 
 @dataclass
-class InducedParam:
-    voxel_cell_size: float  # 载体3D模型体素化后网格尺寸（米）
-    susceptibility: float  # 网格的磁化率，对所有载体体素网格均取相同值
+class InducedFieldConfig:
+    voxel_cell_size: float = 0.0  # 载体3D模型体素化后网格尺寸（米）
+    susceptibility: float = 0.0  # 网格的磁化率，对所有载体体素网格均取相同值
 
 
 @dataclass
-class Orientation:
-    x: float
-    y: float
-    z: float
-
-    def to_numpy(self):
-        return np.array(astuple(self))
+class InterferenceConfig:
+    permanent_field: PermanentFieldConfig = field(default_factory=PermanentFieldConfig)
+    induced_field: InducedFieldConfig = field(default_factory=InducedFieldConfig)
 
 
 @dataclass
-class VehicleParam:
-    model_3d: pv.DataSet  # 载体3D模型
-    actual_wingspan: float  # 机翼展长
-    actual_length: float  # 机身长度
-    actual_height: float  # 机身高度
-    init_orientation: Optional[Orientation] = None  # 载体3D模型初始朝向
+class VehicleConfig:
+    model_3d_path: str = ""  # 载体3D模型路径
+    model_3d: pv.DataSet = None  # 载体3D模型
+    actual_wingspan: float = 0.0  # 翼展，米
+    actual_length: float = 0.0  # 机身长度，米
+    actual_height: float = 0.0  # 机身高度，米
+    init_orientation: Optional[NormalizedUnitVector] = None  # 载体3D模型初始朝向
 
     def pick_orientation(self):
-        orientation: Orientation = None
+        orientation: NormalizedUnitVector = None
 
         def callback(mesh):
             nonlocal orientation
             try:
-                orientation = Orientation(
+                orientation = NormalizedUnitVector(
                     *(Bounds(mesh.bounds).center - Bounds(self.model_3d.bounds).center)
                 )
             except AttributeError as e:
@@ -131,72 +162,75 @@ class VehicleParam:
         self.scale_to_actual_size()
         # self.model_3d.plot(show_grid=True)
 
+    def load_model(self):
+        print("load model")
+        if self.model_3d_path and os.path.isfile(self.model_3d_path):
+            self.model_3d = pv.read(self.model_3d_path)
+        else:
+            raise FileNotFoundError(
+                f"3D model file not found at '{self.model_3d_path}'"
+            )
+
     def __post_init__(self):
+        self.load_model()
         self.initialize_model()
 
 
 @dataclass
+class MagAgentConfig:
+    vehicle: VehicleConfig = field(default_factory=VehicleConfig)
+    interference: InterferenceConfig = field(default_factory=InterferenceConfig)
+
+
 class MagAgent:
-    config: "MagAgent.Config"
-
-    @dataclass
-    class Config:
-        vehicle: VehicleParam
-        interf: "MagAgent.Config.Interf"
-
-        @dataclass
-        class Interf:
-            perm: PermParam
-            induced: InducedParam
-
-    @classmethod
-    def setup(
-        cls,
-        vehicle_param: VehicleParam,
-        perm_param: PermParam,
-        induced_param: InducedParam,
-    ):
-        interf = cls.Config.Interf(perm=perm_param, induced=induced_param)
-        config = cls.Config(vehicle=vehicle_param, interf=interf)
-        return cls(config=config)
-
-    @classmethod
-    def setup_from_config(cls, config_path: PathLike):
-        config_folder = Path(config_path).parent
+    def __init__(self, config_path):
         with open(config_path, "r") as file:
-            config = yaml.safe_load(file)
+            config_data = yaml.safe_load(file)
 
-        vehicle = config["vehicle"]
-        vehicle_param = VehicleParam(
-            model_3d=pv.read(config_folder / Path(vehicle["model_3d"])),
-            actual_wingspan=vehicle["actual_wingspan"],
-            actual_length=vehicle["actual_length"],
-            actual_height=vehicle["actual_height"],
-            init_orientation=Orientation(*vehicle["init_orientation"])
-            if vehicle.get("init_orientation") is not None
-            else None,
+        self.validate_config(config_data)
+        # self.config = MagAgentConfig(**config_data)
+        self.config = dacite.from_dict(
+            MagAgentConfig,
+            config_data,
+            dacite.Config(
+                type_hooks={
+                    CartesianCoord: CartesianCoord.from_list,
+                    CartesianOrientation: CartesianOrientation.from_list,
+                    NormalizedUnitVector: NormalizedUnitVector.from_list,
+                }
+            ),
         )
 
-        perm_sources = []
-        for source in config["interference"]["permanent_field"]["sources"]:
-            location = source.get("location")
-            if location is not None:
-                location = CartesianCoord(*location)
-            else:
-                pass
-            perm_sources.append(
-                MagDipoleParam(
-                    location=location,
-                    orientation=np.array(source["orientation"]),
-                    moment=source["moment"],
-                )
-            )
-        perm_param = PermParam(sources=perm_sources)
-
-        induced_config = config["interference"]["induced_field"]
-        induced_param = InducedParam(
-            voxel_cell_size=induced_config["voxel_cell_size"],
-            susceptibility=induced_config["susceptibility"],
+    def validate_config(self, config_data):
+        config_schema = sc.Schema(
+            {
+                "vehicle": {
+                    "model_3d_path": sc.And(
+                        sc.Use(str), lambda file: os.path.isfile(file)
+                    ),
+                    "actual_wingspan": sc.And(sc.Use(float), lambda n: n > 0),
+                    "actual_length": sc.And(sc.Use(float), lambda n: n > 0),
+                    "actual_height": sc.And(sc.Use(float), lambda n: n > 0),
+                    sc.Optional("init_orientation"): [float, float, float],
+                },
+                "interference": {
+                    "permanent_field": {
+                        "sources": [
+                            {
+                                "orientation": [float, float, float],
+                                "moment": sc.And(sc.Use(float), lambda n: n >= 0),
+                                sc.Optional("location"): [float, float, float],
+                            }
+                        ],
+                    },
+                    "induced_field": {
+                        "voxel_cell_size": sc.And(sc.Use(float), lambda n: n > 0),
+                        "susceptibility": float,
+                    },
+                },
+            }
         )
+        config_schema.validate(config_data)
 
-        return cls.setup(vehicle_param, perm_param, induced_param)
+    def __repr__(self) -> str:
+        return repr(self.config)
