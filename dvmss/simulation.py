@@ -31,7 +31,7 @@ class Simulation:
         self.flight = flight
         self._cached_background_field: GeomagData = None
         self.mag_agent_mesh = self.voxelize_mag_agent()
-        # self.mag_agent_mesh.to_polydata().plot(show_grid=True, show_edges=True, opacity=0.5)
+        self.mag_agent_mesh.to_polydata().plot(show_grid=True, show_edges=True, opacity=0.5)
 
     def voxelize_mag_agent(self):
         scene = Scene.of(
@@ -84,18 +84,23 @@ class Simulation:
     def compute_permanent_interf_vector(self, detectors: DetectorCollection):
         builder = SimulationBuilder.of(Simulation3DDipoles)
         source_locs = tuple(
-            list(astuple(s.location)) for s in self.mag_agent.config.interference.permanent_field.sources
+            list(astuple(s.location))
+            for s in self.mag_agent.config.interference.permanent_field.sources
         )
         builder.sources(*source_locs)
         detector_locs = np.array([astuple(d.location) for d in detectors.items])
 
         builder.receivers(detector_locs, ["bx", "by", "bz"])
         model = np.array(
-            [s.moment_vector.to_numpy() for s in self.mag_agent.config.interference.permanent_field.sources]
+            [
+                s.moment_vector.to_numpy()
+                for s in self.mag_agent.config.interference.permanent_field.sources
+            ]
         ).flatten(
             "F"
         )  # (source_num * 3,)
         perm_vectors = builder.build().dpred(model)  # (detector_num * 3,)
+        perm_vectors *= 1e9  # 单位由T转换为nT
         perm_vectors_expanded = np.repeat(
             perm_vectors[:, np.newaxis], len(self.flight._states), axis=1
         ).T  # (flight_len, detector_num * 3)
@@ -205,11 +210,41 @@ class Simulation:
             )
         return detectors
 
-    def sample(self, detectors: DetectorCollection):
+    def sample(self, detectors: DetectorCollection, plot=False):
         detectors = self.compute_background_field_vector(detectors)
         detectors = self.compute_permanent_interf_vector(detectors)
         detectors = self.compute_induced_interf_vector(detectors)
         detectors = self.merge_sensor_vector_component(detectors)
         detectors = self.compute_tmi(detectors)
+        if plot:
+            self.plot(detectors)
 
         return detectors
+
+    def plot(self, detectors: DetectorCollection):
+        import pyvista as pv
+        from pyvista.plotting import Plotter
+
+        def permanent_field_sources_to_sphere():
+            spheres = []
+            sources = self.mag_agent.config.interference.permanent_field.sources
+            for s in sources:
+                spheres.append(pv.Sphere(center=astuple(s.location), radius=0.2))
+            return spheres
+
+        def detectors_to_spheres():
+            spheres = []
+            for detector in detectors:
+                spheres.append(pv.Sphere(center=astuple(detector.location), radius=0.2))
+            return spheres
+
+        pl = Plotter()
+        pl.add_mesh(self.mag_agent.config.vehicle.model_3d, opacity=0.5)
+        perm_source_spheres = permanent_field_sources_to_sphere()
+        detectors_spheres = detectors_to_spheres()
+        for sphere in perm_source_spheres:
+            pl.add_mesh(sphere, color="red")
+        for sphere in detectors_spheres:
+            pl.add_mesh(sphere, color="blue")
+        pl.show_grid()
+        pl.show()

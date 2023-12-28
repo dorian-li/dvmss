@@ -4,15 +4,17 @@ os.sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from datetime import datetime, timedelta
 from pathlib import Path
 
+import matplotlib.pyplot as plt
+import numpy as np
 import pyvista as pv
 from sgl2020 import SGL2020
 
 from dvmss.agent import MagAgent
-from dvmss.detector import Detector, DetectorCollection, MagSensorType
-from dvmss.flight import Flight
+from dvmss.detector import Detector, DetectorCollection, MagSensor, MagSensorType
+from dvmss.flight import Flight, VehicleState
 from dvmss.geomag import IGRF
 from dvmss.simulation import Simulation
-from dvmss.utils import CartesianCoord
+from dvmss.utils import CartesianCoord, compute_noise_level
 
 if __name__ == "__main__":
     # 各世界坐标系到笛卡尔坐标系xyz的关系：
@@ -23,7 +25,19 @@ if __name__ == "__main__":
     # 4. simpeg: (x,y,z)=>(easting, northing, upward), ENU
     cessna_172_1_config = Path(__file__).resolve().parent / "cessna_172_1.yaml"
     mag_agent = MagAgent(cessna_172_1_config)
-    print(mag_agent)
+    # print(mag_agent)
+
+    # pl = Plotter()
+    # pl.add_mesh(mag_agent.config.vehicle.model_3d)
+    # tail_sphere = pv.Sphere(center=(0, -7, -0.35), radius=0.3)
+    # tail = pv.Cylinder(
+    #     center=[0, -5, -0.35], direction=[0, -1, 0], radius=0.2, height=4
+    # )
+    # pl.add_mesh(tail_sphere, color="red")
+    # pl.add_mesh(tail, color="orange")
+    # pl.add_axes()
+    # pl.show_grid()
+    # pl.show()
 
     surv = SGL2020()
     flt_d = (
@@ -39,6 +53,8 @@ if __name__ == "__main__":
                 "ins_pitch",
                 "ins_roll",
                 "ins_yaw",
+                "mag_1_c",
+                "mag_1_uc",
             ]
         )
         .take(include_line=True)
@@ -56,8 +72,55 @@ if __name__ == "__main__":
         pitch=flt_d["ins_pitch"],
         yaw=flt_d["ins_yaw"],
     )
+    from pyvista.plotting import Plotter
+    from scipy.spatial.transform import Rotation as R
 
-    print(flight)
+    # p = Plotter(window_size=[1600, 912])
+    # p.open_movie("test.wmv", framerate=60, quality=10)
+    # p.show_axes()
+    # mesh = mag_agent.config.vehicle.model_3d.copy()
+    # p.add_mesh(mesh)
+    # # p.add_mesh(mesh.outline_corners())
+    # # p.camera.azimuth = -180
+    # p.show_grid()
+    # p.add_arrows(np.array([0, 0, 3]), np.array([0, 1, 0]), color="lightcoral")
+    # att_NED = flight.query(
+    #     VehicleState.ROLL, VehicleState.PITCH, VehicleState.YAW
+    # ).to_numpy()
+    # # NED to ENU
+    # att_ENU = np.column_stack((att_NED[:, 1], att_NED[:, 0], -att_NED[:, 2] + 90))
+    # r = R.from_euler(
+    #     "xyz",
+    #     angles=att_ENU,
+    #     degrees=True,
+    # )  # yaw-pitch-roll顺序旋转
+    # # loop for att_ENU each row
+    # from time import sleep
+    # from dvmss.utils import rotation_matrix_to_spatial_transformation_matrix
+    # print(p.camera.model_transform_matrix)
+    # # r0 = R.from_matrix(p.camera.model_transform_matrix[:3, :3])
+    # # r = R.concatenate(r0, r)
+    # att_matrixs = r.as_matrix()
+    # att_matrixs_inv = r.inv().as_matrix()
+    # # p.write_frame()
+    # for i in range(att_matrixs.shape[0])[:10000]:
+    #     m_spatial = rotation_matrix_to_spatial_transformation_matrix(
+    #         att_matrixs[i, :, :]
+    #     )
+    #     m_spatial_inv = rotation_matrix_to_spatial_transformation_matrix(
+    #         att_matrixs_inv[i, :, :]
+    #     )
+    #     mesh.transform(m_spatial)
+    #     p.write_frame()
+    #     mesh.transform(m_spatial_inv)
+    #     sleep(0.01)
+    # p.close()
+    # exit()
+    # print(flight)
+
+    detectors = DetectorCollection.of(
+        Detector(location=CartesianCoord(0, -7, 0), sensor_type=MagSensorType.SCALAR)
+    )
 
     detectors = DetectorCollection.of(
         Detector(
@@ -88,27 +151,12 @@ if __name__ == "__main__":
     )
 
     simluation = Simulation(mag_agent, IGRF, flight)
-    sampled_detectors = simluation.sample(detectors)
-    d = sampled_detectors.items[0]
-    import matplotlib.pyplot as plt
+    sampled_detectors = simluation.sample(detectors, plot=True)
 
-    from dvmss.detector import MagSensor
-
-    # plt.plot(d.sensor_data[MagSensor.B_X], label="bx")
-    # plt.plot(d.sensor_data[MagSensor.B_Y], label="by")
-    # plt.plot(d.sensor_data[MagSensor.B_Z], label="bz")
-    # plt.plot(d.sensor_data[MagSensor.GEO_X], label="geo_x")
-    # plt.plot(d.sensor_data[MagSensor.GEO_Y], label="geo_y")
-    # plt.plot(d.sensor_data[MagSensor.GEO_Z], label="geo_z")
-    # plt.plot(d.sensor_data[MagSensor.TMI], label="tmi")
-    # plt.plot(d.sensor_data[MagSensor.GEO_T], label="geo_t")
-    # plt.plot(d.sensor_data[MagSensor.PERM_X], label="perm_x")
-    # plt.plot(d.sensor_data[MagSensor.PERM_Y], label="perm_x")
-    # plt.plot(d.sensor_data[MagSensor.PERM_Z], label="perm_x")
-    plt.plot(d.sensor_data[MagSensor.PERM_TMI], label="perm_tmi")
-    # plt.plot(d.sensor_data[MagSensor.INDUCED_X], label="induced_x")
-    # plt.plot(d.sensor_data[MagSensor.INDUCED_Y], label="induced_y")
-    # plt.plot(d.sensor_data[MagSensor.INDUCED_Z], label="induced_z")
-    plt.plot(d.sensor_data[MagSensor.INDUCED_TMI], label="induced_tmi")
-    plt.legend()
+    # subplot all MagSensor
+    fig, axes = plt.subplots(4, 4)
+    for i, ax in enumerate(axes.flatten()):
+        ax.plot(sampled_detectors[0].sensor_data.iloc[:, i])
+        ax.set_title(sampled_detectors[0].sensor_data.columns[i])
+        ax.set_xticks([])
     plt.show()

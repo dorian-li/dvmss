@@ -1,4 +1,4 @@
-from dataclasses import astuple, dataclass
+from dataclasses import astuple, dataclass, field
 from enum import Enum, auto
 from typing import List, Literal, Optional, Union
 
@@ -42,16 +42,20 @@ class Detector:
     sensor_type: MagSensorType
     id: int = None
     location: Optional[CartesianCoord] = None
-    sensor_data: pd.DataFrame = pd.DataFrame(columns=[e for e in MagSensor])
+    sensor_data: pd.DataFrame = None
     loc_interactive: bool = False
 
     def assign_sensor_data(self, component: MagSensor, data: ArrayLike):
         self.sensor_data[component] = data
 
+    def __post_init__(self):
+        if self.sensor_data is None:
+            self.sensor_data = pd.DataFrame(columns=[e for e in MagSensor])
+
 
 @dataclass
 class DetectorCollection:
-    items: List[Detector]
+    items: List[Detector] = field(default_factory=list)
 
     @classmethod
     def of(cls, *detectors: Detector):
@@ -65,3 +69,6 @@ class DetectorCollection:
 
     def __repr__(self) -> str:
         return repr(self.items)
+
+    def __getitem__(self, index):
+        return self.items[index]
