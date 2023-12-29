@@ -1,0 +1,1 @@
+from ._samples_generator import make_full_flight_attitude

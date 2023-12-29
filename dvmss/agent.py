@@ -1,18 +1,12 @@
 import os
 from dataclasses import astuple, dataclass, field
-from os import PathLike
-from pathlib import Path
-from typing import Any, List, Optional
+from typing import List, Optional
 
 import dacite
 import numpy as np
 import pyvista as pv
 import schema as sc
 import yaml
-from metalpy.mepa.process_executor import ProcessExecutor
-from metalpy.scab.modelling import Scene
-from metalpy.scab.modelling.shapes import Obj2
-from metalpy.scab.modelling.transform import Rotation
 from metalpy.utils.bounds import Bounds
 from pyvista.plotting import Plotter
 from pyvista.plotting.opts import ElementType
@@ -95,7 +89,7 @@ class VehicleConfig:
     actual_height: float = 0.0  # 机身高度，米
     init_orientation: Optional[NormalizedUnitVector] = None  # 载体3D模型初始朝向
 
-    def pick_orientation(self):
+    def choose_orientation(self):
         orientation: NormalizedUnitVector = None
 
         def callback(mesh):
@@ -106,7 +100,6 @@ class VehicleConfig:
                 )
             except AttributeError as e:
                 pass
-            print(orientation)
 
         pl = Plotter()
         pl.add_mesh(self.model_3d)
@@ -130,11 +123,12 @@ class VehicleConfig:
             raise ValueError(
                 "The initial orientation is not specified. Please interactively select the face of the vehicle heading"
             )
+        print(f"{orientation=}, can be recorded in the configuration to avoid choosing again")
         return orientation
 
     def rotate_to_northward(self):
         if self.init_orientation is None:
-            self.init_orientation = self.pick_orientation()
+            self.init_orientation = self.choose_orientation()
         to_northward_r = R.align_vectors(
             self.init_orientation.to_numpy().reshape((1, 3)),
             np.array([(0, 1, 0)]),  # y轴正方向为正北
@@ -149,7 +143,7 @@ class VehicleConfig:
         self.model_3d.translate(to_center, inplace=True)
 
     def scale_to_actual_size(self):
-        bounds = Bounds(self.model_3d.bounds)  # 模型已经变化，重新计算包围盒
+        bounds = Bounds(self.model_3d.bounds)
         actual_size = np.array(
             [self.actual_wingspan, self.actual_length, self.actual_height]
         )
@@ -163,7 +157,6 @@ class VehicleConfig:
         # self.model_3d.plot(show_grid=True)
 
     def load_model(self):
-        print("load model")
         if self.model_3d_path and os.path.isfile(self.model_3d_path):
             self.model_3d = pv.read(self.model_3d_path)
         else:

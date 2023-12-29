@@ -16,7 +16,7 @@ class GeomagElem(Enum):
 
     NORTH = auto()  # 北向分量强度(nanoTesla)
     EAST = auto()  # 东向分量强度(nanoTesla)
-    VERTICAL = auto()  # 垂直向分量强度(nanoTesla)
+    VERTICAL = auto()  # 垂直向分量强度(nanoTesla)，向下为正
     HORIZONTAL = auto()  # 水平向分量强度(nanoTesla)
     DECLINATION = auto()  # 磁偏角(degree)
     INCLINATION = auto()  # 磁倾角(degree)
