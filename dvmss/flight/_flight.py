@@ -40,7 +40,15 @@ class Flight:
             VehicleState.ROLL, VehicleState.PITCH, VehicleState.YAW
         ).to_numpy()
         # NED to ENU
-        att_ENU = np.column_stack((att_NED[:, 1], att_NED[:, 0], -att_NED[:, 2] + 90))
+        att_NED = np.column_stack(
+            (
+                np.zeros(att_NED.shape[0]),
+                np.zeros(att_NED.shape[0]),
+                np.linspace(0, 360, att_NED.shape[0]),  # yaw
+            )
+        )
+        # att_ENU = np.column_stack((att_NED[:, 1], att_NED[:, 0], -att_NED[:, 2]))
+        att_ENU = np.column_stack((-att_NED[:, 2], att_NED[:, 0], -att_NED[:, 2]))
         return R.from_euler(
             "zxy",
             angles=att_ENU,

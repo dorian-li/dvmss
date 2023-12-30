@@ -3,6 +3,7 @@ from functools import reduce
 from typing import List, Union
 
 import numpy as np
+import pyvista as pv
 from metalpy.mepa.process_executor import ProcessExecutor
 from metalpy.scab import Tied
 from metalpy.scab.builder.simulation_builder import SimulationBuilder
@@ -13,13 +14,18 @@ from metalpy.scab.modelling.transform import Rotation
 from metalpy.scab.potential_fields.magnetics.simulation import Simulation3DDipoles
 from metalpy.scab.utils.format import format_pandas
 from metalpy.utils.bounds import Bounds
+from pyvista.plotting import Plotter
 from SimPEG.potential_fields.magnetics.simulation import Simulation3DIntegral
 
 from .agent import MagAgent
 from .detector import DetectorCollection, MagSensor
 from .flight import Flight, VehicleState
 from .geomag import GeomagData, GeomagElem, GeomagRefField
-from .utils import NED_to_ENU, project_vectors_to_orientations
+from .utils import (
+    NED_to_ENU,
+    project_vectors_to_orientations,
+    rotation_matrix_to_spatial_transformation_matrix,
+)
 
 
 class Simulation:
@@ -31,22 +37,26 @@ class Simulation:
         self.flight = flight
         self._cached_background_field: GeomagData = None
         self.mag_agent_mesh = self.voxelize_mag_agent()
-        self.mag_agent_mesh.to_polydata().plot(show_grid=True, show_edges=True, opacity=0.5)
+        # self.mag_agent_mesh.to_polydata().plot(show_grid=True, show_edges=True, opacity=0.5)
 
     def voxelize_mag_agent(self):
+        agent_obj = Obj2(
+            model=self.mag_agent.config.vehicle.model_3d,
+            surface_range=[-0.1, 0.1],
+            subdivide=True,
+            ignore_surface_check=True,
+        )
+        # model原点信息丢失，重新平移至场景中心
+        to_center = -agent_obj.center
+        agent_obj.translate(*to_center, inplace=True)
         scene = Scene.of(
-            Obj2(
-                model=self.mag_agent.config.vehicle.model_3d,
-                surface_range=[-0.1, 0.1],
-                subdivide=True,
-                ignore_surface_check=True,
-            ),
+            agent_obj,
             models=self.mag_agent.config.interference.induced_field.susceptibility,
         )
         return scene.build(
             cell_size=self.mag_agent.config.interference.induced_field.voxel_cell_size,
             cache=True,
-            executor=ProcessExecutor(),
+            executor=ProcessExecutor(4),
         )
 
     @property
@@ -222,9 +232,6 @@ class Simulation:
         return detectors
 
     def plot(self, detectors: DetectorCollection):
-        import pyvista as pv
-        from pyvista.plotting import Plotter
-
         def permanent_field_sources_to_sphere():
             spheres = []
             sources = self.mag_agent.config.interference.permanent_field.sources
@@ -239,7 +246,7 @@ class Simulation:
             return spheres
 
         pl = Plotter()
-        pl.add_mesh(self.mag_agent.config.vehicle.model_3d, opacity=0.5)
+        pl.add_mesh(self.mag_agent_mesh.to_polydata(), opacity=0.5, show_edges=True)
         perm_source_spheres = permanent_field_sources_to_sphere()
         detectors_spheres = detectors_to_spheres()
         for sphere in perm_source_spheres:
@@ -248,3 +255,29 @@ class Simulation:
             pl.add_mesh(sphere, color="blue")
         pl.show_grid()
         pl.show()
+
+    def preview(self, save_filename: str = None):
+        pl = Plotter()
+        vehicle = self.mag_agent.config.vehicle.model_3d.copy()
+        pl.add_mesh(vehicle)
+        pl.open_movie(save_filename)
+        pl.show_grid()
+        pl.show_axes()
+        pl.add_arrows(
+            np.array([0, 0, 3]), np.array([0, 1, 0]), color="lightcoral"
+        )  # 指示正北方
+        att_rot = self.flight.att_rot
+        att_matrixs = att_rot.as_matrix()
+        att_matrixs_inv = att_rot.inv().as_matrix()
+        for att_matrix, att_matrix_inv in zip(att_matrixs, att_matrixs_inv):
+            att_spatial_matrix = rotation_matrix_to_spatial_transformation_matrix(
+                att_matrix
+            )
+            att_spatial_matrix_inv = rotation_matrix_to_spatial_transformation_matrix(
+                att_matrix_inv
+            )
+            vehicle.transform(att_spatial_matrix, inplace=True)
+            pl.write_frame()
+            vehicle.transform(att_spatial_matrix_inv, inplace=True)
+
+        pl.close()
