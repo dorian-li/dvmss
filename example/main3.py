@@ -105,15 +105,52 @@ if __name__ == "__main__":
     detectors = make_detectors()
 
     simluation = Simulation(mag_agent, IGRF, flights)
-    simluation.preview("test.wmv")
-    exit()
+    # simluation.preview()
+    # exit()
 
     sampled_detectors = simluation.sample(detectors, plot=False)
 
     # subplot all MagSensor
     fig, axes = plt.subplots(4, 4)
     for i, ax in enumerate(axes.flatten()):
-        ax.plot(sampled_detectors[0].sensor_data.iloc[:, i])
-        ax.set_title(sampled_detectors[0].sensor_data.columns[i])
+        ax.plot(sampled_detectors[1].sensor_data.iloc[:, i])
+        ax.set_title(sampled_detectors[1].sensor_data.columns[i])
         ax.set_xticks([])
+    plt.show()
+    from deinterf import TollesLawsonCompensator
+
+    compensator = TollesLawsonCompensator()
+    compensator.fit(
+        # sampled_detectors[0].sensor_data[MagSensor.GEO_X],
+        # sampled_detectors[0].sensor_data[MagSensor.GEO_Y],
+        # sampled_detectors[0].sensor_data[MagSensor.GEO_Z],
+        sampled_detectors[3].sensor_data[MagSensor.B_X],
+        sampled_detectors[3].sensor_data[MagSensor.B_Y],
+        sampled_detectors[3].sensor_data[MagSensor.B_Z],
+        sampled_detectors[0].sensor_data[MagSensor.TMI],
+    )
+    # compensator.adjust_sampling_rate(10)
+    # compensator.enable_bpf(True)
+    # compensator.use_permanent(True)
+    # compensator.use_induced(True)
+    compensator.use_eddy(False)
+
+    comped, interf = compensator.apply(
+        # sampled_detectors[0].sensor_data[MagSensor.GEO_X],
+        # sampled_detectors[0].sensor_data[MagSensor.GEO_Y],
+        # sampled_detectors[0].sensor_data[MagSensor.GEO_Z],
+        sampled_detectors[3].sensor_data[MagSensor.B_X],
+        sampled_detectors[3].sensor_data[MagSensor.B_Y],
+        sampled_detectors[3].sensor_data[MagSensor.B_Z],
+        sampled_detectors[0].sensor_data[MagSensor.TMI],
+    )
+    compensator.evaluate_src()
+    compensator.evaluate(sampled_detectors[0].sensor_data[MagSensor.TMI], comped)
+
+    plt.plot(comped, label="comped")
+    plt.plot(sampled_detectors[0].sensor_data[MagSensor.TMI], label="uncomped")
+    plt.xlabel("sample[point]")
+    plt.ylabel("magnetic[nT]")
+    plt.legend()
+    plt.grid()
     plt.show()

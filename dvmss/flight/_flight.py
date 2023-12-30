@@ -36,24 +36,15 @@ class Flight:
 
     @property
     def att_rot(self):
-        att_NED = self.query(
-            VehicleState.ROLL, VehicleState.PITCH, VehicleState.YAW
+        att_eulers = self.query(
+            VehicleState.PITCH, VehicleState.ROLL, VehicleState.YAW
         ).to_numpy()
-        # NED to ENU
-        att_NED = np.column_stack(
-            (
-                np.zeros(att_NED.shape[0]),
-                np.zeros(att_NED.shape[0]),
-                np.linspace(0, 360, att_NED.shape[0]),  # yaw
-            )
-        )
-        # att_ENU = np.column_stack((att_NED[:, 1], att_NED[:, 0], -att_NED[:, 2]))
-        att_ENU = np.column_stack((-att_NED[:, 2], att_NED[:, 0], -att_NED[:, 2]))
+        att_eulers[:, 2] = -att_eulers[:, 2]  # ENU
         return R.from_euler(
-            "zxy",
-            angles=att_ENU,
+            "xyz",
+            angles=att_eulers,
             degrees=True,
-        )  # yaw-pitch-roll顺序旋转
+        )
 
     @classmethod
     def setup_from_pandas(cls, date: datetime, states: pd.DataFrame):

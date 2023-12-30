@@ -1,6 +1,9 @@
 from dataclasses import astuple
+from time import sleep
 from functools import reduce
+from pathlib import Path
 from typing import List, Union
+from uuid import uuid1
 
 import numpy as np
 import pyvista as pv
@@ -256,11 +259,13 @@ class Simulation:
         pl.show_grid()
         pl.show()
 
-    def preview(self, save_filename: str = None):
+    def preview(self):
         pl = Plotter()
         vehicle = self.mag_agent.config.vehicle.model_3d.copy()
         pl.add_mesh(vehicle)
-        pl.open_movie(save_filename)
+        cache_file = Path(".cache/sim_previews") / f"{uuid1()}.wmv"
+        cache_file.parent.mkdir(parents=True, exist_ok=True)
+        pl.open_movie(cache_file)
         pl.show_grid()
         pl.show_axes()
         pl.add_arrows(
@@ -279,5 +284,6 @@ class Simulation:
             vehicle.transform(att_spatial_matrix, inplace=True)
             pl.write_frame()
             vehicle.transform(att_spatial_matrix_inv, inplace=True)
+            # sleep(0.1)
 
         pl.close()
