@@ -64,28 +64,28 @@ def make_flights():
 def make_detectors():
     return DetectorCollection.of(
         Detector(
+            name="left-wing-middle",
             location=CartesianCoord(-2.8, 1.1, 0.32),
-            sensor_type=MagSensorType.SCALAR,
             # loc_interactive=True,
         ),
         Detector(
+            name="right-wing-middle",
             location=CartesianCoord(2.8, 1.1, 0.32),
-            sensor_type=MagSensorType.SCALAR,
             # loc_interactive=True,
         ),
         Detector(
+            name="left-wing-tip",
             location=CartesianCoord(-5.5, 1.1, 0.32),
-            sensor_type=MagSensorType.SCALAR,
             # loc_interactive=True,
         ),
         Detector(
+            name="right-wing-tip",
             location=CartesianCoord(5.5, 1.1, 0.32),
-            sensor_type=MagSensorType.SCALAR,
             # loc_interactive=True,
         ),
         Detector(
+            name="tail",
             location=CartesianCoord(0, -8, -0.7),
-            sensor_type=MagSensorType.SCALAR,
             # loc_interactive=True,
         ),
     )
@@ -124,9 +124,9 @@ if __name__ == "__main__":
         # sampled_detectors[0].sensor_data[MagSensor.GEO_X],
         # sampled_detectors[0].sensor_data[MagSensor.GEO_Y],
         # sampled_detectors[0].sensor_data[MagSensor.GEO_Z],
-        sampled_detectors[3].sensor_data[MagSensor.B_X],
-        sampled_detectors[3].sensor_data[MagSensor.B_Y],
-        sampled_detectors[3].sensor_data[MagSensor.B_Z],
+        sampled_detectors[0].sensor_data[MagSensor.B_X],
+        sampled_detectors[0].sensor_data[MagSensor.B_Y],
+        sampled_detectors[0].sensor_data[MagSensor.B_Z],
         sampled_detectors[0].sensor_data[MagSensor.TMI],
     )
     # compensator.adjust_sampling_rate(10)
@@ -139,9 +139,9 @@ if __name__ == "__main__":
         # sampled_detectors[0].sensor_data[MagSensor.GEO_X],
         # sampled_detectors[0].sensor_data[MagSensor.GEO_Y],
         # sampled_detectors[0].sensor_data[MagSensor.GEO_Z],
-        sampled_detectors[3].sensor_data[MagSensor.B_X],
-        sampled_detectors[3].sensor_data[MagSensor.B_Y],
-        sampled_detectors[3].sensor_data[MagSensor.B_Z],
+        sampled_detectors[0].sensor_data[MagSensor.B_X],
+        sampled_detectors[0].sensor_data[MagSensor.B_Y],
+        sampled_detectors[0].sensor_data[MagSensor.B_Z],
         sampled_detectors[0].sensor_data[MagSensor.TMI],
     )
     compensator.evaluate_src()

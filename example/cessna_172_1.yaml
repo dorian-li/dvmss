@@ -9,13 +9,15 @@ interference:
   permanent_field:
     sources:
       - orientation: [0.9848077, 0.0, -0.17364818]
-        moment: 770.4
+        # moment: 77.4
+        moment: 154.8
         location: [0.0, 1.9, 0.0]
 
       - orientation: [-9.84807753e-01, 1.20604166e-16, 1.73648178e-01]
-        moment: 890.5
+        # moment: 89.5
+        moment: 179.0
         location: [0.0, 2.7, 0.0]
 
   induced_field:
     voxel_cell_size: 0.1
-    susceptibility: 1000.0
+    susceptibility: 10.0

@@ -1,7 +1,7 @@
 from dataclasses import astuple
-from time import sleep
 from functools import reduce
 from pathlib import Path
+from time import sleep
 from typing import List, Union
 from uuid import uuid1
 
@@ -167,21 +167,21 @@ class Simulation:
         for detector in detectors:
             detector.assign_sensor_data(
                 MagSensor.B_X,
-                detector.sensor_data[MagSensor.GEO_X]
-                + detector.sensor_data[MagSensor.PERM_X]
-                + detector.sensor_data[MagSensor.INDUCED_X],
+                detector.sensor_accurate[MagSensor.GEO_X]
+                + detector.sensor_accurate[MagSensor.PERM_X]
+                + detector.sensor_accurate[MagSensor.INDUCED_X],
             )
             detector.assign_sensor_data(
                 MagSensor.B_Y,
-                detector.sensor_data[MagSensor.GEO_Y]
-                + detector.sensor_data[MagSensor.PERM_Y]
-                + detector.sensor_data[MagSensor.INDUCED_Y],
+                detector.sensor_accurate[MagSensor.GEO_Y]
+                + detector.sensor_accurate[MagSensor.PERM_Y]
+                + detector.sensor_accurate[MagSensor.INDUCED_Y],
             )
             detector.assign_sensor_data(
                 MagSensor.B_Z,
-                detector.sensor_data[MagSensor.GEO_Z]
-                + detector.sensor_data[MagSensor.PERM_Z]
-                + detector.sensor_data[MagSensor.INDUCED_Z],
+                detector.sensor_accurate[MagSensor.GEO_Z]
+                + detector.sensor_accurate[MagSensor.PERM_Z]
+                + detector.sensor_accurate[MagSensor.INDUCED_Z],
             )
         return detectors
 
@@ -190,14 +190,16 @@ class Simulation:
             detector.assign_sensor_data(
                 MagSensor.TMI,
                 project_vectors_to_orientations(
-                    detector.sensor_data[[MagSensor.B_X, MagSensor.B_Y, MagSensor.B_Z]],
+                    detector.sensor_accurate[
+                        [MagSensor.B_X, MagSensor.B_Y, MagSensor.B_Z]
+                    ],
                     self.tmi_projections,
                 ),
             )
             detector.assign_sensor_data(
                 MagSensor.PERM_TMI,
                 project_vectors_to_orientations(
-                    detector.sensor_data[
+                    detector.sensor_accurate[
                         [MagSensor.PERM_X, MagSensor.PERM_Y, MagSensor.PERM_Z]
                     ],
                     self.tmi_projections,
@@ -206,7 +208,7 @@ class Simulation:
             detector.assign_sensor_data(
                 MagSensor.INDUCED_TMI,
                 project_vectors_to_orientations(
-                    detector.sensor_data[
+                    detector.sensor_accurate[
                         [MagSensor.INDUCED_X, MagSensor.INDUCED_Y, MagSensor.INDUCED_Z]
                     ],
                     self.tmi_projections,
@@ -215,7 +217,7 @@ class Simulation:
             detector.assign_sensor_data(
                 MagSensor.GEO_T,
                 np.linalg.norm(
-                    detector.sensor_data[
+                    detector.sensor_accurate[
                         [MagSensor.GEO_X, MagSensor.GEO_Y, MagSensor.GEO_Z]
                     ],
                     axis=1,

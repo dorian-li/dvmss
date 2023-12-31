@@ -39,18 +39,20 @@ class MagSensor(Enum):
 
 @dataclass
 class Detector:
-    sensor_type: MagSensorType
-    id: int = None
+    name: int = None
     location: Optional[CartesianCoord] = None
-    sensor_data: pd.DataFrame = None
+    sensor_accurate: pd.DataFrame = None
+    sensor_with_error: pd.DataFrame = None
     loc_interactive: bool = False
 
     def assign_sensor_data(self, component: MagSensor, data: ArrayLike):
-        self.sensor_data[component] = data
+        self.sensor_accurate[component] = data
 
     def __post_init__(self):
-        if self.sensor_data is None:
-            self.sensor_data = pd.DataFrame(columns=[e for e in MagSensor])
+        if self.sensor_accurate is None:
+            self.sensor_accurate = pd.DataFrame(columns=[e for e in MagSensor])
+        if self.sensor_with_error is None:
+            self.sensor_with_error = pd.DataFrame(columns=[e for e in MagSensor])
 
 
 @dataclass
@@ -70,5 +72,5 @@ class DetectorCollection:
     def __repr__(self) -> str:
         return repr(self.items)
 
-    def __getitem__(self, index):
+    def __getitem__(self, index) -> Detector:
         return self.items[index]
