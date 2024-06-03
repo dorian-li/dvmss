@@ -3,7 +3,6 @@ name = "dvmss"
 version = "0.0.1"
 description = "Dynamic Vehicle Magnetic Sensor Simulation"
 requires-python = ">=3.9"
-dependencies = ["numpy", "metalpy", "pandas", "ppigrf", "loguru", "tqdm", "pooch"]
 authors = [{ name = "dorian", email = "dorian.li@outlook.com" }]
 readme = "README.md"
 classifiers = [
@@ -11,6 +10,10 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
 ]
+dynamic = ["dependencies"]
+
+[tool.setuptools.dynamic]
+dependencies = {file = ["requirements.txt"]}
 
 [build-system]
 requires = ["hatchling"]
